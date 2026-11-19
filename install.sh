@@ -371,6 +371,8 @@ validate_api_key() {
       https://api.anthropic.com/v1/models 2>/dev/null)" || code="000"
   msg="$(tr -d '\n' <"$body" 2>/dev/null | head -c 2000 || true)"
   rm -f "$body"
+  # 실패 이유를 남겨 둔다(서버의 오류 문구만 — 키는 들어 있지 않다)
+  printf 'HTTP %s %s' "$code" "$(printf '%s' "$msg" | sed -n 's/.*"message" *: *"\([^"]*\)".*/\1/p' | head -c 200)" >"$TMP_DIR/validate.detail" 2>/dev/null || true
   case "$code" in
     200) echo ok ;;
     401 | 403) echo invalid ;;
@@ -404,7 +406,7 @@ guide_api_key() {
   num "③" "이름(Name) 칸에 OpenCode 라고 쓰세요."
   num "④" "Workspace 를 고르는 칸이 있으면 「Default」 를 고르세요."
   num "⑤" "「Add」 버튼을 누르세요."
-  num "⑥" "sk-ant-api 로 시작하는 키가 나오면 옆의 「Copy」 를 누르세요. (키는 이때 한 번만 보여요)"
+  num "⑥" "sk-ant- 로 시작하는 긴 키가 나오면 옆의 「Copy」 를 누르세요. (키는 이때 한 번만 보여요)"
   num "⑦" "이 터미널 창을 한 번 누르고 ⌘V(붙여넣기) → 엔터"
   note "붙여 넣어도 화면에 아무것도 안 보이는 게 정상이에요(비밀번호처럼 숨겨져요)."
   printf '\n'
@@ -437,15 +439,22 @@ ask_api_key() {
     fi
     case "$API_KEY" in
       sk-ant-admin*)
-        warn "관리자 키(sk-ant-admin…)는 크롬 확장 설정에 넣는 키입니다. 여기에는 API 키(sk-ant-api…)를 넣어 주세요."
+        warn "관리자 키(sk-ant-admin…)는 크롬 확장 설정에 넣는 키예요. 여기에는 「API keys」 화면에서 만든 키를 넣어 주세요."
         API_KEY=""
         if [ "$NONINTERACTIVE" = "1" ]; then die "API 키 형식이 아닙니다."; fi
         continue
         ;;
-      sk-ant-api*) : ;;
+      sk-ant-oat* | sk-ant-ort*)
+        warn "이건 Claude Code 로그인용 토큰이에요. 콘솔 「API keys」 화면에서 「Create key」 로 만든 키를 넣어 주세요."
+        API_KEY=""
+        if [ "$NONINTERACTIVE" = "1" ]; then die "API 키 형식이 아닙니다."; fi
+        continue
+        ;;
+      # API 키 : 예전 키는 sk-ant-api…, 사람에게 연결된 개인 키는 sk-ant-usr… 처럼 시작한다
+      sk-ant-*) : ;;
       *)
         if [ "${CBK_SKIP_VALIDATE:-0}" != "1" ]; then
-          warn "API 키는 sk-ant-api 로 시작합니다. 복사가 덜 되었는지 확인해 주세요."
+          warn "API 키는 sk-ant- 로 시작해요(예 : sk-ant-api… / sk-ant-usr…). 복사가 덜 되었는지 확인해 주세요."
           API_KEY=""
           if [ "$NONINTERACTIVE" = "1" ]; then die "API 키 형식이 아닙니다."; fi
           continue
@@ -485,6 +494,7 @@ ask_api_key() {
         ;;
       invalid)
         warn "키 오류 — 키가 틀렸거나, 삭제·만료된 키입니다. 콘솔에서 새로 만들어 다시 붙여 넣어 주세요."
+        note "서버 응답 : $(cat "$TMP_DIR/validate.detail" 2>/dev/null)"
         ;;
       workspace)
         warn "작업 공간(Workspace)이 정해지지 않은 키입니다. 콘솔에서 키를 만들 때 Workspace 를 하나(예 : Default) 골라 다시 만든 뒤 붙여 넣어 주세요."
@@ -501,6 +511,7 @@ ask_api_key() {
         ;;
       *)
         warn "알 수 없는 이유로 키를 확인하지 못했습니다."
+        note "서버 응답 : $(cat "$TMP_DIR/validate.detail" 2>/dev/null)"
         ;;
     esac
     API_KEY=""

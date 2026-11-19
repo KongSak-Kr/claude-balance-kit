@@ -278,7 +278,7 @@ async function drawings(browser) {
     '   ③ 이름(Name) 칸에 OpenCode 라고 쓰세요.',
     '   ④ Workspace 를 고르는 칸이 있으면 「Default」 를 고르세요.',
     '   ⑤ 「Add」 버튼을 누르세요.',
-    '   ⑥ sk-ant-api 로 시작하는 키가 나오면 옆의 「Copy」 를 누르세요.',
+    '   ⑥ sk-ant- 로 시작하는 긴 키가 나오면 옆의 「Copy」 를 누르세요.',
     '   ⑦ 이 터미널 창을 한 번 누르고 ⌘V(붙여넣기) → 엔터',
     { c: 'dim', t: '      붙여 넣어도 화면에 아무것도 안 보이는 게 정상이에요(비밀번호처럼 숨겨져요).' },
     '',

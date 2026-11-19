@@ -23,6 +23,7 @@ import time
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 STUBS = os.path.join(ROOT, "tests", "sim", "stubs")
 FAKE_KEY = "sk-ant-" + "api03-" + "Z" * 40  # 실제 키 아님 (서버가 401 을 돌려줌)
+FAKE_USR_KEY = "sk-ant-" + "usr01-" + "Y" * 40  # 개인 키 모양(가짜)
 ENTER = "엔터"
 
 
@@ -107,7 +108,7 @@ def main():
         home = make_home(tmp, "wrongkey")
         code, out, sent = run(home, [
             ("준비되면 엔터", "\n", None),
-            ("API 키 :", FAKE_KEY + "\n", None),
+            ("API 키 :", FAKE_USR_KEY + "\n", None),
             ("API 키 :", "hello\n", None),
             ("API 키 :", "sk-ant-" + "admin01-" + "Q" * 30 + "\n", None),
         ])
@@ -115,11 +116,12 @@ def main():
         checks += [
             ("1) 네 번 모두 입력 받음", sent == 4),
             ("1) API 키 만드는 법 안내(Create key)", "Create key" in out),
-            ("1) 실제 서버 401 → 키 오류 안내", "키 오류" in out),
-            ("1) 형식 오류 안내", "sk-ant-api 로 시작" in out),
+            ("1) sk-ant-usr 개인 키도 받아서 실제 서버에 확인 → 401 키 오류 안내", "키 오류" in out),
+            ("1) 서버가 돌려준 이유 표시", "서버 응답 : HTTP 401" in out),
+            ("1) 형식 오류 안내", "sk-ant- 로 시작" in out),
             ("1) 관리자 키를 넣으면 안내", "관리자 키(sk-ant-admin…)" in out),
             ("1) 3번 실패 후 멈춤", "3번 실패" in out and code != 0),
-            ("1) 화면에 키가 보이지 않음", FAKE_KEY not in out),
+            ("1) 화면에 키가 보이지 않음", FAKE_USR_KEY not in out),
         ]
 
         # 2) 처음 설치 — 안내를 따라 끝까지
