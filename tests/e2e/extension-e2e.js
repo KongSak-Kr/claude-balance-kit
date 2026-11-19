@@ -422,7 +422,7 @@ async function step(name, fn) {
     await p.close();
   });
 
-  await step('관리자 키 삭제 → 팝업에 "관리자 키를 넣으면"', async () => {
+  await step('관리자 키 삭제 → 팝업에 "사용액은 선택 기능" 안내', async () => {
     const o = await context.newPage();
     await o.goto('chrome-extension://' + extId + '/options.html');
     o.on('dialog', (d) => d.accept());

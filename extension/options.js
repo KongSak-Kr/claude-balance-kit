@@ -29,6 +29,7 @@ async function loadAll() {
     ? '저장된 관리자 키가 있습니다' + (keySavedAt ? ' (' + C.formatWhenKo(keySavedAt, Date.now()) + ' 저장)' : '') + '. 바꾸려면 새 키를 붙여 넣고 연결 확인을 누르세요.'
     : '저장된 관리자 키가 없습니다.';
   $('delete-key').disabled = !adminKey;
+  $('welcome').classList.toggle('hidden', Boolean(adminKey));
 }
 
 function send(msg) {

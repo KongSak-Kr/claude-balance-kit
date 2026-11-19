@@ -11,7 +11,7 @@
 curl -fsSL https://raw.githubusercontent.com/KongSak-Kr/claude-balance-kit/main/install.sh | bash
 ```
 
-처음 쓰는 분은 [설치안내서](manual/설치안내서.md)를 그대로 따라 하세요.
+처음 쓰는 분은 그림이 있는 [설치 안내서](https://kongsak-kr.github.io/claude-balance-kit/)(또는 [설치안내서.md](manual/설치안내서.md))를 따라 하세요. 붙여 넣은 뒤로는 터미널이 한 단계씩 안내합니다.
 삭제 : `bash ~/ClaudeBalanceKit/uninstall.sh`
 
 ## 저장소 구조
@@ -43,7 +43,7 @@ python3 tests/sim/interactive-sim.py       # curl | bash 대화형 모의 실행
 node tests/e2e/extension-e2e.js            # 크로미움에 확장을 올려 자동 시험 (playwright 필요)
 ```
 
-윈도우 크롬에서 직접 시험 : `chrome://extensions` → 개발자 모드 → **압축해제된 확장 프로그램을 로드합니다** → 이 저장소의 `extension` 폴더.
+윈도우 크롬에서 직접 시험 : `chrome://extensions` → 개발자 모드 → **압축해제된 확장 프로그램 로드** → 이 저장소의 `extension` 폴더.
 
 맥 검사는 GitHub Actions(`.github/workflows/ci.yml`, macos-latest)에서 shellcheck · 비대화 설치 · 재실행 · 삭제를 자동으로 합니다.
 

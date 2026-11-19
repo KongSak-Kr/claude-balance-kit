@@ -58,7 +58,7 @@ check "uninstall.sh 함께 복사" test -x "$H/ClaudeBalanceKit/uninstall.sh"
 check "설치안내서 함께 복사" test -f "$H/ClaudeBalanceKit/manual/설치안내서.md"
 check "자동 실행은 만들지 않음" test ! -f "$H/Library/LaunchAgents/com.claudebalancekit.opencode.plist"
 check "출력에 키 없음" no_key_in_output
-check "요약 출력" grep -q "설치 요약" "$H/out.txt"
+check "요약 출력" grep -q "설치가 끝났어요" "$H/out.txt"
 
 echo "▶ B. OpenCode 2.x 가 있는 맥에 새로 설치"
 new_home b
@@ -139,7 +139,7 @@ cat "$ROOT/install.sh" | HOME="$H" PATH="$H/bin:$PATH" CBK_ALLOW_NON_MAC=1 CBK_N
   CBK_ARCHIVE_URL="file://$WORK/kit.tar.gz" bash >"$H/out.txt" 2>&1 || { cat "$H/out.txt"; exit 1; }
 check "내려받은 확장 manifest" test -f "$H/ClaudeBalanceKit/extension/manifest.json"
 check "한글 이름 설치안내서 그대로" test -f "$H/ClaudeBalanceKit/manual/설치안내서.md"
-check "요약까지 끝까지 실행(표준입력을 먹지 않음)" grep -q "설치 요약" "$H/out.txt"
+check "요약까지 끝까지 실행(표준입력을 먹지 않음)" grep -q "설치가 끝났어요" "$H/out.txt"
 
 echo
 printf '모의 실행 결과 : 통과 %d · 실패 %d\n' "$PASS" "$FAIL"

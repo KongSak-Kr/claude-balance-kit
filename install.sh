@@ -5,13 +5,14 @@
 #  터미널에 아래 한 줄을 붙여 넣고 엔터 :
 #    curl -fsSL https://raw.githubusercontent.com/KongSak-Kr/claude-balance-kit/main/install.sh | bash
 #
-#  하는 일
-#   1. 맥·칩 확인
-#   2. Anthropic API 키 입력 → 유효성 확인
+#  하는 일 (처음 쓰는 사람도 따라 할 수 있게 한 단계씩 안내하고, 다 했으면 엔터를 기다린다)
+#   1. 맥·크롬 확인
+#   2. Anthropic API 키 : 키 만드는 화면을 크롬에 열어 주고, 붙여 넣으면 유효성 확인
 #   3. OpenCode 설치(이미 있으면 건너뜀)
 #   4. OpenCode 에 키 등록(다른 공급자 키는 그대로 둠)
 #   5. (선택) 로그인 시 OpenCode 자동 실행 + 바탕화면 "OpenCode 열기"
-#   6. 크롬 확장 파일 내려받기 → ~/ClaudeBalanceKit/extension
+#   6. 크롬 확장 : 파일 준비 → 넣는 법을 한 동작씩 안내 → 크롬 프로필에서 등록·고정 여부 자동 확인
+#   7. 잔액 확인해 보기 + (선택) 관리자 키
 #
 #  다시 실행하면 "업데이트 모드"로 동작합니다.
 #  키는 화면·로그·셸 기록·명령줄 인자 어디에도 남기지 않습니다(set -x 금지).
@@ -39,13 +40,18 @@ OC_INSTALL_URL="${CBK_OPENCODE_INSTALL_URL:-https://opencode.ai/v2/install}"
 OC_CRED_ID="cred_claude_balance_kit"
 OC_CRED_LABEL="claude-balance-kit"
 ANTHROPIC_VERSION="2026-10-21"
-MANUAL_FILE_ENC="%EC%84%A4%EC%B9%98%EC%95%88%EB%82%B4%EC%84%9C.md"
-ANCHOR_EXT_ENC="5-%ED%81%AC%EB%A1%AC-%ED%99%95%EC%9E%A5-%EB%93%B1%EB%A1%9D"
+KEYS_URL="https://platform.claude.com/settings/keys"
+ADMIN_KEYS_URL="https://platform.claude.com/settings/admin-keys"
+BILLING_URL="https://platform.claude.com/settings/billing"
+CHROME_DATA="${CBK_CHROME_DATA:-$HOME/Library/Application Support/Google/Chrome}"
 V1_WEB_PORT=4096
-TOTAL=6
+TOTAL=7
 
 NONINTERACTIVE="${CBK_NONINTERACTIVE:-0}"
 NO_OPEN="${CBK_NO_OPEN:-$NONINTERACTIVE}"
+# 안내서 웹 주소 (GitHub Pages) : https://<아이디 소문자>.github.io/<저장소>/
+REPO_OWNER_LC="$(printf '%s' "${CBK_REPO%%/*}" | tr '[:upper:]' '[:lower:]')"
+MANUAL_WEB="${CBK_MANUAL_URL:-https://$REPO_OWNER_LC.github.io/${CBK_REPO#*/}/}"
 
 TMP_DIR=""
 API_KEY=""
@@ -54,6 +60,8 @@ OC_MODE="" # v2 | v1 | skip
 UPDATE_MODE=0
 KEY_CHANGED=0
 AUTOSTART_DONE="n"
+EXT_READY=0 # 이번 실행에서 크롬에 확장이 들어간 것을 확인했으면 1
+ANSWER=""
 SUMMARY_DONE=""
 SUMMARY_TODO=""
 
@@ -97,7 +105,7 @@ ask_yn() {
     [ "$(lower_trim "$ans")" = "y" ]
     return
   fi
-  if [ "$def" = "y" ]; then hint="[Y/n]"; else hint="[y/N]"; fi
+  if [ "$def" = "y" ]; then hint="(그냥 엔터 = 예, 아니면 n)"; else hint="(그냥 엔터 = 아니오, 하려면 y)"; fi
   while :; do
     printf '  %s %s ' "$q" "$hint" >/dev/tty
     IFS= read -r ans </dev/tty || ans=""
@@ -142,6 +150,105 @@ run_limited() {
 open_quiet() {
   [ "$NO_OPEN" = "1" ] && return 1
   open "$@" >/dev/null 2>&1
+}
+
+# ── 단계별 안내 도우미 ────────────────────────────────────────────────
+interactive() { [ "$NONINTERACTIVE" != "1" ]; }
+
+# num "①" "할 일"  /  note "덧붙임"
+num() { printf '   %s %s\n' "$1" "$2"; }
+note() { printf '      %s%s%s\n' "$D" "$*" "$N"; }
+say() { printf '  %s\n' "$*"; }
+
+wait_enter() {
+  interactive || return 0
+  printf '\n  %s▶ %s%s ' "$B" "${1:-다 했으면 이 터미널 창을 한 번 누르고 엔터(return)를 누르세요.}" "$N" >/dev/tty
+  IFS= read -r ANSWER </dev/tty || ANSWER=""
+}
+
+# 한 줄 입력을 받아 소문자·공백 제거해 ANSWER 에 둔다
+ask_line() {
+  printf '  %s ' "$1" >/dev/tty
+  IFS= read -r ANSWER </dev/tty || ANSWER=""
+  ANSWER="$(lower_trim "$ANSWER")"
+}
+
+clip() { printf '%s' "$1" | pbcopy >/dev/null 2>&1 || true; }
+
+# 크롬으로 주소 열기 (크롬이 없으면 기본 브라우저). 못 열면 1.
+open_chrome() {
+  [ "$NO_OPEN" = "1" ] && return 1
+  if chrome_installed; then
+    open -a "Google Chrome" "$1" >/dev/null 2>&1
+  else
+    open "$1" >/dev/null 2>&1
+  fi
+}
+
+# 오래 걸리는 명령 : 출력은 기록 파일로 보내고 화면에는 점만 찍는다(초보자가 헷갈릴 문구를 숨김)
+run_with_dots() {
+  local msg="$1" log="$2" pid rc=0
+  shift 2
+  printf '  %s ' "$msg"
+  "$@" </dev/null >>"$log" 2>&1 &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    printf '.'
+    sleep 2
+  done
+  wait "$pid" || rc=$?
+  printf '\n'
+  return "$rc"
+}
+
+# 몇 초 동안 1초마다 확인 : poll 초 명령…
+poll() {
+  local secs="$1" i=0
+  shift
+  while [ "$i" -lt "$secs" ]; do
+    if "$@"; then return 0; fi
+    printf '.'
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# ── 크롬 프로필에서 확장 등록 · 고정 여부 확인 (읽기만 함) ───────────────
+ext_real_dir() { (cd "$EXT_DIR" 2>/dev/null && pwd -P) || printf '%s' "$EXT_DIR"; }
+
+# 압축해제 확장의 ID = 폴더 경로의 SHA-256 앞 32자를 a~p 로 바꾼 것 (크롬 규칙)
+ext_id() {
+  local h
+  if command -v shasum >/dev/null 2>&1; then
+    h="$(printf '%s' "$(ext_real_dir)" | shasum -a 256 | cut -c1-32)"
+  elif command -v sha256sum >/dev/null 2>&1; then
+    h="$(printf '%s' "$(ext_real_dir)" | sha256sum | cut -c1-32)"
+  else
+    h="$(printf '%s' "$(ext_real_dir)" | openssl dgst -sha256 -r | cut -c1-32)"
+  fi
+  printf '%s' "$h" | tr '0-9a-f' 'a-p'
+}
+
+chrome_prefs_has() {
+  local f
+  for f in "$CHROME_DATA"/*/Preferences "$CHROME_DATA"/*/"Secure Preferences"; do
+    [ -f "$f" ] || continue
+    if grep -qF -- "$1" "$f" 2>/dev/null; then return 0; fi
+  done
+  return 1
+}
+
+ext_loaded() { chrome_prefs_has "\"path\":\"$(ext_real_dir)\"" || chrome_prefs_has "\"$(ext_id)\":{"; }
+
+ext_pinned() {
+  local f id
+  id="$(ext_id)"
+  for f in "$CHROME_DATA"/*/Preferences; do
+    [ -f "$f" ] || continue
+    if grep -o '"pinned_extensions":\[[^]]*\]' "$f" 2>/dev/null | grep -qF "\"$id\""; then return 0; fi
+  done
+  return 1
 }
 
 chrome_installed() {
@@ -192,6 +299,17 @@ json_auth_edit() {
   )
 }
 
+# ── 시작 인사 ──────────────────────────────────────────────────────
+welcome() {
+  printf '\n%sClaude 잔액 키트 설치를 시작합니다%s\n\n' "$B" "$N"
+  interactive || return 0
+  say "· 10분쯤 걸려요. 아래에 나오는 안내를 위에서부터 하나씩 따라 하면 돼요."
+  say "· 「엔터」를 누르라고 나오면 키보드 오른쪽의 return(엔터) 키를 누르세요."
+  say "· 중간에 크롬 화면이 열리면, 할 일을 한 뒤 이 터미널 창으로 돌아오세요."
+  say "  (터미널 창이 안 보이면 화면 아래 Dock 에서 검은 네모 모양 「터미널」 아이콘을 누르세요)"
+  wait_enter "준비되면 엔터를 누르세요."
+}
+
 # ── 1. 컴퓨터 확인 ──────────────────────────────────────────────────
 check_machine() {
   step 1 "컴퓨터 확인"
@@ -224,6 +342,20 @@ check_machine() {
   if [ -f "$MARKER" ] || [ -d "$EXT_DIR" ]; then
     UPDATE_MODE=1
     ok "이미 설치되어 있어 업데이트 모드로 진행합니다."
+  fi
+
+  if chrome_installed; then
+    ok "구글 크롬이 있어요."
+  elif interactive; then
+    warn "구글 크롬이 없어요. 먼저 크롬을 설치해 주세요."
+    open_quiet "https://www.google.com/chrome/" || true
+    num "①" "열린 화면에서 「Chrome 다운로드」를 누르세요."
+    num "②" "내려받은 파일(googlechrome.dmg)을 열고, 크롬 아이콘을 「Applications」 폴더로 끌어다 놓으세요."
+    note "화면이 안 열렸으면 사파리에서 google.com/chrome 을 여세요."
+    wait_enter "크롬을 설치했으면 엔터를 누르세요."
+    if chrome_installed; then ok "크롬을 찾았어요."; else warn "아직 크롬이 안 보여요. 일단 계속하고, 크롬 확장은 크롬을 설치한 뒤 다시 실행해서 넣으면 돼요."; fi
+  else
+    warn "구글 크롬이 보이지 않습니다."
   fi
 }
 
@@ -258,14 +390,35 @@ validate_api_key() {
   esac
 }
 
+guide_api_key() {
+  interactive || return 0
+  printf '\n'
+  say "OpenCode 가 Claude 를 쓰려면 「API 키」가 필요해요. 크롬에서 하나 만들어 주세요."
+  printf '\n'
+  if open_chrome "$KEYS_URL"; then
+    num "①" "크롬에 Anthropic 「API keys」 화면을 열었어요. (로그인 화면이 나오면 먼저 로그인)"
+  else
+    num "①" "크롬 주소창에 platform.claude.com/settings/keys 를 입력하고 엔터 (로그인 화면이 나오면 먼저 로그인)"
+  fi
+  num "②" "오른쪽 위 「Create key」 버튼을 누르세요."
+  num "③" "이름(Name) 칸에 OpenCode 라고 쓰세요."
+  num "④" "Workspace 를 고르는 칸이 있으면 「Default」 를 고르세요."
+  num "⑤" "「Add」 버튼을 누르세요."
+  num "⑥" "sk-ant-api 로 시작하는 키가 나오면 옆의 「Copy」 를 누르세요. (키는 이때 한 번만 보여요)"
+  num "⑦" "이 터미널 창을 한 번 누르고 ⌘V(붙여넣기) → 엔터"
+  note "붙여 넣어도 화면에 아무것도 안 보이는 게 정상이에요(비밀번호처럼 숨겨져요)."
+  printf '\n'
+}
+
 ask_api_key() {
   step 2 "Anthropic API 키"
   if [ "$UPDATE_MODE" = "1" ]; then
-    if ! ask_yn "API 키를 새로 입력할까요? (기존 키를 그대로 쓰려면 엔터)" n "${CBK_UPDATE_KEY:-n}"; then
-      ok "기존 키를 그대로 둡니다."
+    if ! ask_yn "API 키를 새로 넣을까요? (지금 키를 그대로 쓰려면 그냥 엔터)" n "${CBK_UPDATE_KEY:-n}"; then
+      ok "지금 키를 그대로 둡니다."
       return 0
     fi
   fi
+  guide_api_key
 
   local attempt=0 result
   while [ "$attempt" -lt 3 ]; do
@@ -274,8 +427,7 @@ ask_api_key() {
       API_KEY="$(printf '%s' "${CBK_API_KEY:-}" | tr -d '[:space:]')"
       [ -n "$API_KEY" ] || die "비대화 모드에는 CBK_API_KEY 가 필요합니다."
     else
-      info "platform.claude.com 에서 복사한 API 키를 붙여 넣고 엔터를 누르세요."
-      info "${D}(입력해도 화면에 아무것도 안 보이는 게 정상입니다)${N}"
+      if [ "$attempt" -gt 1 ]; then note "붙여 넣어도 화면에 아무것도 안 보이는 게 정상이에요."; fi
       read_secret "API 키 : "
     fi
 
@@ -408,18 +560,21 @@ install_opencode() {
     return 0
   fi
 
-  info "OpenCode 를 공식 설치 프로그램으로 설치합니다(1~2분)…"
   ensure_shell_rc
-  local installer="$TMP_DIR/opencode-install.sh"
-  curl -fsSL --max-time 60 "$OC_INSTALL_URL" -o "$installer" || die "OpenCode 설치 프로그램을 내려받지 못했습니다(인터넷 확인)."
-  bash "$installer" </dev/null || die "OpenCode 설치에 실패했습니다. 위 메시지를 확인해 주세요."
+  mkdir -p "$KIT_DIR/logs"
+  local installer="$TMP_DIR/opencode-install.sh" log="$KIT_DIR/logs/opencode-install.log"
+  curl -fsSL --max-time 60 "$OC_INSTALL_URL" -o "$installer" </dev/null || die "OpenCode 설치 프로그램을 내려받지 못했습니다(인터넷 확인)."
+  if ! run_with_dots "OpenCode 설치 중(1~2분, 그냥 기다리세요)" "$log" bash "$installer"; then
+    tail -n 15 "$log" >&2 || true
+    die "OpenCode 설치에 실패했습니다. 위 내용을 확인해 주세요(전체 기록 : $log)."
+  fi
   rm -f "$installer"
   export PATH="$HOME/.opencode/bin:$PATH"
   find_opencode
   [ -n "$OC_BIN" ] || die "OpenCode 를 설치했지만 실행 파일을 찾지 못했습니다."
   ok "설치 완료 : $OC_BIN"
   detect_oc_mode
-  info "새로 연 터미널 창부터 opencode 명령을 쓸 수 있습니다(지금 창은 PATH 가 아직 반영되지 않음)."
+  note "터미널에서 opencode 명령은 새로 연 터미널 창부터 쓸 수 있어요."
   add_done "OpenCode 설치 ($OC_BIN)"
 }
 
@@ -457,6 +612,7 @@ save_key_v2() {
   # 이 키트가 예전에 등록한 키가 있으면 먼저 지운다(다른 키는 건드리지 않음)
   run_limited 60 "$OC_BIN" auth logout anthropic "$OC_CRED_ID" </dev/null >/dev/null 2>&1 || true
 
+  info "OpenCode 에 키를 넣는 중… (처음엔 30초쯤 걸릴 수 있어요)"
   # 키는 표준입력으로만 전달(명령줄 인자·파일에 남기지 않음)
   if out="$(printf '[{"id":"%s","integrationID":"anthropic","label":"%s","active":true,"value":{"type":"key","key":"%s"}}]' \
     "$OC_CRED_ID" "$OC_CRED_LABEL" "$API_KEY" | run_limited 120 "$OC_BIN" auth import 2>&1)"; then
@@ -627,13 +783,14 @@ setup_autostart() {
   fi
   local def="y"
   if [ "$UPDATE_MODE" = "1" ] && [ ! -f "$LA_PLIST" ]; then def="n"; fi
-  if ! ask_yn "로그인할 때 OpenCode 를 자동으로 켜고, 바탕화면에 '$SHORTCUT_NAME' 바로가기를 만들까요?" "$def" "${CBK_AUTOSTART:-y}"; then
+  if ! ask_yn "맥을 켤 때 OpenCode 가 자동으로 켜지게 하고, 바탕화면에 '$SHORTCUT_NAME' 아이콘을 만들까요?" "$def" "${CBK_AUTOSTART:-y}"; then
     ok "건너뜁니다."
     return 0
   fi
   write_launch_agent || true
   local helper
   helper="$(write_open_helper)"
+  if interactive; then note "「터미널이 데스크탑 폴더에 접근하려고 합니다」 창이 뜨면 「허용」을 누르세요."; fi
   if make_shortcut "$helper"; then :; fi
   AUTOSTART_DONE="y"
   add_done "로그인 시 OpenCode 자동 실행 + 바탕화면 '$SHORTCUT_NAME'"
@@ -697,43 +854,159 @@ fetch_extension() {
 EOF
 }
 
-prepare_extension() {
-  step 6 "크롬 확장 준비"
-  fetch_extension
-  ok "확장 파일 : $EXT_DIR"
-  printf '  %s※ 이 폴더를 옮기거나 지우면 크롬 확장이 꺼집니다.%s\n' "$Y" "$N"
+guide_load_extension() {
+  while :; do
+    printf '\n'
+    say "${B}크롬에 「Claude 잔액 키트」를 넣을 차례예요. 하나씩 따라 해 주세요.${N}"
+    printf '\n'
+    clip "chrome://extensions"
+    if open_chrome "chrome://extensions"; then
+      num "①" "크롬에 「확장 프로그램」 화면을 열었어요."
+    else
+      num "①" "크롬을 열어 주세요."
+    fi
+    note "「확장 프로그램」 화면이 안 보이면 : 크롬 맨 위 주소창을 누르고 ⌘V → 엔터 (주소를 복사해 뒀어요)"
+    num "②" "화면 오른쪽 위 「개발자 모드」 스위치를 눌러 켜세요. (파란색이 되면 켜진 거예요)"
+    wait_enter
+    clip "$(ext_real_dir)"
+    printf '\n'
+    num "③" "왼쪽 위에 새로 생긴 「압축해제된 확장 프로그램 로드」 버튼을 누르세요."
+    num "④" "폴더를 고르는 창이 뜨면, 키보드에서 ⌘ + Shift + G 세 개를 함께 누르세요."
+    num "⑤" "작은 입력 칸이 나오면 ⌘V → 엔터 (폴더 위치를 복사해 뒀어요)"
+    num "⑥" "창 오른쪽 아래 「선택」 버튼을 누르세요."
+    note "그러면 「확장 프로그램」 화면에 「Claude 잔액 키트」 카드가 생기고, 설정 탭이 하나 열려요(그대로 두세요)."
+    wait_enter
+    while :; do
+      printf '  크롬에 들어갔는지 확인하는 중'
+      if poll 25 ext_loaded; then
+        printf '\n'
+        ok "크롬에 잘 들어갔어요!"
+        return 0
+      fi
+      printf '\n'
+      warn "아직 확인이 안 돼요."
+      note "「Claude 잔액 키트」 카드가 보이는데도 이 안내가 나오면 s 를 누르고 엔터(넘어가기)"
+      ask_line "그냥 엔터 = 다시 확인 / r = 처음부터 다시 안내 / s = 넘어가기 :"
+      case "$ANSWER" in
+        s | ㄴ) return 1 ;;
+        r | ㄱ) continue 2 ;;
+        *) : ;;
+      esac
+    done
+  done
+}
 
-  if ! chrome_installed; then
-    warn "구글 크롬이 보이지 않습니다. https://www.google.com/chrome 에서 크롬을 설치한 뒤 확장을 등록해 주세요."
+guide_pin() {
+  printf '\n'
+  num "⑦" "크롬 오른쪽 위, 주소창 끝의 퍼즐 조각 모양 아이콘을 누르세요."
+  num "⑧" "목록에서 「Claude 잔액 키트」 오른쪽의 핀(압정) 모양을 누르세요."
+  note "주소창 오른쪽에 청록색 \$ 아이콘이 생기면 된 거예요."
+  wait_enter
+  printf '  확인하는 중'
+  if poll 15 ext_pinned; then
+    printf '\n'
+    ok "툴바에 고정됐어요!"
+  else
+    printf '\n'
+    note "고정이 확인되지 않았어요. \$ 아이콘이 보이면 괜찮아요. 안 보이면 나중에 퍼즐 아이콘에서 다시 핀을 누르면 돼요."
   fi
+}
 
-  if [ "$UPDATE_MODE" = "1" ]; then
-    add_done "크롬 확장 파일 업데이트 ($EXT_DIR)"
-    add_todo "크롬 주소창에 chrome://extensions → 'Claude 잔액 키트' 카드의 새로고침(↻) 누르기"
-    if [ "$NO_OPEN" != "1" ]; then
-      printf 'chrome://extensions' | pbcopy 2>/dev/null || true
-      open_quiet -a "Google Chrome" "chrome://extensions" || true
-      info "크롬 확장 화면을 여는 중입니다. 안 열리면 크롬 주소창에 chrome://extensions 를 붙여 넣으세요(복사해 둠)."
+guide_reload_extension() {
+  printf '\n'
+  say "크롬에 새 파일을 알려 줄 차례예요."
+  clip "chrome://extensions"
+  if open_chrome "chrome://extensions"; then num "①" "크롬에 「확장 프로그램」 화면을 열었어요."; else num "①" "크롬을 열어 주세요."; fi
+  note "안 보이면 : 크롬 주소창을 누르고 ⌘V → 엔터"
+  num "②" "「Claude 잔액 키트」 카드 오른쪽 아래 동그란 화살표(↻)를 누르세요."
+  wait_enter
+  ok "업데이트를 마쳤어요."
+}
+
+prepare_extension() {
+  step 6 "크롬 확장 넣기"
+  fetch_extension
+  ok "확장 파일을 준비했어요 : $EXT_DIR"
+  printf '  %s※ 홈 폴더의 ClaudeBalanceKit 폴더는 옮기거나 지우지 마세요(확장이 꺼져요).%s\n' "$Y" "$N"
+
+  if ! interactive; then
+    if [ "$UPDATE_MODE" = "1" ]; then
+      add_done "크롬 확장 파일 업데이트 ($EXT_DIR)"
+      add_todo "크롬 주소창에 chrome://extensions → 'Claude 잔액 키트' 카드의 새로고침(↻) 누르기"
+    else
+      add_done "크롬 확장 파일 준비 ($EXT_DIR)"
+      add_todo "크롬 확장 등록 : chrome://extensions → 개발자 모드 켜기 → '압축해제된 확장 프로그램 로드' → 홈 폴더 > ClaudeBalanceKit > extension 선택"
+      add_todo "퍼즐 아이콘에서 'Claude 잔액 키트' 고정(핀)"
     fi
     return 0
   fi
 
-  add_done "크롬 확장 파일 준비 ($EXT_DIR)"
-  add_todo "크롬 확장 등록 : chrome://extensions → 개발자 모드 켜기 → '압축해제된 확장 프로그램을 로드합니다' → 홈 폴더 > ClaudeBalanceKit > extension 선택"
-  add_todo "퍼즐 아이콘에서 'Claude 잔액 키트' 고정(핀)"
-  add_todo "관리자 키(sk-ant-admin…) 받아서 확장 설정 화면에 붙여 넣고 '연결 확인'"
-  add_todo "결제 페이지를 한 번 열어 첫 잔액이 읽히는지 확인"
+  if ! chrome_installed; then
+    add_todo "크롬을 설치한 뒤 설치 한 줄을 다시 실행해 확장 넣기"
+    return 0
+  fi
 
-  if [ "$NO_OPEN" != "1" ]; then
-    open_quiet "$KIT_DIR" || true
-    printf 'chrome://extensions' | pbcopy 2>/dev/null || true
-    open_quiet -a "Google Chrome" "chrome://extensions" || true
-    case "$CBK_REPO" in
-      YOUR_*) : ;; # 아직 실제 아이디로 바꾸지 않은 저장소
-      *) open_quiet -a "Google Chrome" "https://github.com/$CBK_REPO/blob/$CBK_BRANCH/manual/$MANUAL_FILE_ENC#$ANCHOR_EXT_ENC" || true ;;
-    esac
-    info "Finder 에 ClaudeBalanceKit 폴더를 열었습니다."
-    info "크롬 확장 화면이 안 열렸다면 크롬 주소창에 chrome://extensions 를 붙여 넣으세요(⌘V, 이미 복사해 둠)."
+  if ext_loaded; then
+    guide_reload_extension
+    add_done "크롬 확장 업데이트"
+    if ! ext_pinned; then guide_pin; fi
+    return 0
+  fi
+
+  if guide_load_extension; then
+    EXT_READY=1
+    add_done "크롬에 'Claude 잔액 키트' 등록"
+  else
+    EXT_READY=1 # 사용자가 카드가 보인다고 했거나 넘어감 → 다음 단계 안내는 계속
+    add_todo "크롬 확장 화면(chrome://extensions)에 'Claude 잔액 키트' 카드가 있는지 확인"
+  fi
+  guide_pin
+}
+
+# ── 7. 잔액 확인해 보기 + (선택) 관리자 키 ────────────────────────────
+first_check() {
+  step 7 "잔액 확인해 보기"
+  if ! interactive; then
+    add_todo "관리자 키(sk-ant-admin…) 받아서 확장 설정 화면에 붙여 넣고 '연결 확인' (선택)"
+    add_todo "결제 페이지를 한 번 열어 첫 잔액이 읽히는지 확인"
+    ok "건너뜁니다(비대화 모드)."
+    return 0
+  fi
+  if [ "$EXT_READY" != "1" ]; then
+    ok "건너뜁니다."
+    return 0
+  fi
+  printf '\n'
+  if open_chrome "$BILLING_URL"; then
+    num "①" "크롬에 Anthropic 결제(Billing) 화면을 열었어요. 로그인 화면이 나오면 먼저 로그인하세요."
+  else
+    num "①" "크롬 주소창에 platform.claude.com/settings/billing 을 입력하고 엔터 (로그인 화면이 나오면 로그인)"
+  fi
+  num "②" "화면에 Credit balance(크레딧 잔액) 금액이 보이면, 주소창 오른쪽 청록색 \$ 아이콘을 누르세요."
+  num "③" "작은 창 맨 위에 잔액이 진한 글씨로 나오면 성공이에요."
+  note "잔액을 확인할 때 결제 화면 탭이 잠깐 열렸다 닫히는 건 정상이에요."
+  wait_enter
+
+  printf '\n'
+  say "(선택) 오늘 · 이번 주 · 이번 달 사용액과 「잔액 부족 알림」까지 쓰려면 「관리자 키」가 필요해요."
+  note "Anthropic 콘솔의 조직 관리자만 만들 수 있어요. 잘 모르겠으면 그냥 엔터 — 잔액 보기는 지금도 돼요."
+  if ask_yn "지금 관리자 키를 넣을까요?" n n; then
+    printf '\n'
+    if open_chrome "$ADMIN_KEYS_URL"; then
+      num "①" "크롬에 「Admin keys」 화면을 열었어요."
+    else
+      num "①" "크롬 주소창에 platform.claude.com/settings/admin-keys 를 입력하고 엔터"
+    fi
+    num "②" "「Create admin key」 → 이름 칸에 잔액확장 → 「Add」 를 누르세요."
+    num "③" "sk-ant-admin 으로 시작하는 키 옆 「Copy」 를 누르세요."
+    num "④" "크롬의 「Claude 잔액 키트 설정」 탭으로 가세요. (없으면 \$ 아이콘 → 오른쪽 위 「설정」)"
+    num "⑤" "「관리자 키」 칸을 누르고 ⌘V → 「연결 확인」 버튼"
+    num "⑥" "초록 글씨로 「연결됨」 이 나오면 끝이에요."
+    note "'개인 계정은 만들 수 없다'는 안내가 나오면 이 단계는 그냥 넘어가세요."
+    wait_enter
+    add_done "관리자 키 안내 (사용액 · 부족 알림)"
+  else
+    add_todo "(선택) 사용액·부족 알림을 쓰려면 관리자 키를 확장 설정에 넣기 — 안내서 「관리자 키」"
   fi
 }
 
@@ -749,17 +1022,27 @@ write_marker() {
 }
 
 print_summary() {
-  printf '\n%s────────────── 설치 요약 ──────────────%s\n' "$B" "$N"
+  printf '\n%s────────────── 설치가 끝났어요 ──────────────%s\n\n' "$B" "$N"
+  if interactive; then
+    say "· 잔액 보기      : 크롬 주소창 오른쪽 청록색 \$ 아이콘을 누르세요"
+    if [ "$AUTOSTART_DONE" = "y" ]; then say "· OpenCode 쓰기  : 바탕화면의 「$SHORTCUT_NAME」 아이콘을 두 번 누르세요"; fi
+    say "· 안내서        : $MANUAL_WEB"
+    say "· 업데이트      : 이번과 같은 한 줄을 다시 붙여 넣기"
+    printf '\n'
+  fi
   printf '%s설치·변경된 것%s\n' "$B" "$N"
   if [ -n "$SUMMARY_DONE" ]; then printf '%s' "$SUMMARY_DONE"; else printf '  (바뀐 것 없음)\n'; fi
-  printf '\n%s다음에 할 일%s\n' "$B" "$N"
-  if [ -n "$SUMMARY_TODO" ]; then printf '%s' "$SUMMARY_TODO"; else printf '  (없음)\n'; fi
-  printf '\n  설치안내서 : %s\n' "$KIT_DIR/manual/설치안내서.md"
-  printf '  삭제 : bash %s\n\n' "$KIT_DIR/uninstall.sh"
+  if [ -n "$SUMMARY_TODO" ]; then
+    printf '\n%s남은 할 일%s\n' "$B" "$N"
+    printf '%s' "$SUMMARY_TODO"
+  fi
+  printf '\n  삭제하려면 : bash %s\n' "$KIT_DIR/uninstall.sh"
+  if interactive; then printf '\n  이 터미널 창은 이제 닫아도 돼요.\n'; fi
+  printf '\n'
 }
 
 main() {
-  printf '%sClaude 잔액 키트 설치%s\n' "$B" "$N"
+  welcome
   check_machine
   ask_api_key
   install_opencode
@@ -767,6 +1050,7 @@ main() {
   setup_autostart
   prepare_extension
   write_marker
+  first_check
   print_summary
 }
 

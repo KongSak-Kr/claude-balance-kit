@@ -29,6 +29,11 @@ h2 {
   margin: 0 0 10px;
 }
 
+.card.welcome {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 label {
   display: block;
   margin: 12px 0 4px;
@@ -82,6 +87,10 @@ input.short {
 .warn-box {
   margin: 4px 0 6px;
   font-size: 13px;
+}
+
+#key-saved {
+  margin-top: 8px;
 }
 
 .result {
