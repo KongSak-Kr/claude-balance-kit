@@ -1,0 +1,130 @@
+body {
+  width: 340px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 0;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+.icon-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+}
+
+section {
+  padding: 10px 14px;
+}
+
+section + section {
+  border-top: 1px solid var(--line);
+}
+
+.balance {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  margin: 2px 0 2px;
+  transition: color 0.2s;
+}
+
+.balance.stale {
+  color: var(--faint);
+}
+
+.when {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.status {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.status .spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.rows {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  row-gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rows .k {
+  color: var(--text);
+}
+
+.rows .v {
+  text-align: right;
+  font-weight: 500;
+}
+
+.rows.loading .v {
+  color: var(--faint);
+}
+
+.recharge {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.recharge .src {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.actions button {
+  flex: 1;
+}
+
+.banner {
+  margin: 8px 14px 0;
+}

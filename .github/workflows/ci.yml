@@ -1,0 +1,134 @@
+name: 검사
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extension:
+    name: 확장 · 모의 설치 (리눅스)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: manifest 검사
+        run: node tests/check-manifest.js
+      - name: 단위 테스트 (파싱 · 계산)
+        run: TZ=Asia/Seoul node --test tests/*.test.js
+      - name: 키 유출 검사
+        run: bash tests/secret-scan.sh
+      - name: 설치 · 삭제 모의 실행 (가짜 맥 명령)
+        run: bash tests/sim/run-sim.sh
+      - name: 대화형 설치 모의 실행 (curl | bash 재현)
+        run: python3 tests/sim/interactive-sim.py
+
+  mac:
+    name: 맥 설치 스크립트 (macos-latest)
+    runs-on: macos-latest
+    env:
+      CBK_NONINTERACTIVE: "1"
+      CBK_API_KEY: dummy
+      CBK_SKIP_VALIDATE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 맥 기본 bash 버전 (설치는 이 bash 로 돈다)
+        run: /bin/bash --version | head -n 1
+
+      - name: shellcheck
+        run: |
+          brew install shellcheck >/dev/null
+          shellcheck -s bash install.sh uninstall.sh tests/secret-scan.sh tests/sim/run-sim.sh tests/mac/*.sh
+
+      - name: auth.json 병합 시험 (osascript JavaScript)
+        run: /bin/bash tests/mac/test-json-merge.sh
+
+      - name: 비대화 설치 1회차 (OpenCode 2.x 실제 설치 포함)
+        env:
+          CBK_LOCAL_SOURCE: ${{ github.workspace }}
+          CBK_REPO: ${{ github.repository }}
+        run: /bin/bash install.sh
+
+      - name: 설치 결과 확인
+        run: /bin/bash tests/mac/verify-install.sh
+
+      - name: 재실행 (업데이트 모드, 키 유지)
+        env:
+          CBK_LOCAL_SOURCE: ${{ github.workspace }}
+          CBK_REPO: ${{ github.repository }}
+          CBK_UPDATE_KEY: n
+        run: |
+          /bin/bash install.sh | tee rerun.log
+          grep -q "업데이트 모드" rerun.log
+          grep -q "새로고침" rerun.log
+
+      - name: 재실행 (업데이트 모드, 키 바꾸기)
+        env:
+          CBK_LOCAL_SOURCE: ${{ github.workspace }}
+          CBK_REPO: ${{ github.repository }}
+          CBK_UPDATE_KEY: y
+          CBK_API_KEY: dummy2
+        run: /bin/bash install.sh
+
+      - name: 재실행 뒤 다시 확인
+        run: /bin/bash tests/mac/verify-install.sh
+
+      - name: 한 줄 설치와 같은 방식 (raw 주소 | bash, 확장은 GitHub 에서 내려받기)
+        if: github.event_name == 'push'
+        env:
+          CBK_REPO: ${{ github.repository }}
+          CBK_BRANCH: ${{ github.ref_name }}
+          CBK_UPDATE_KEY: n
+        run: curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/install.sh" | /bin/bash
+
+      - name: 삭제 (키도 지우기)
+        env:
+          CBK_REMOVE_KEY: y
+          CBK_REMOVE_OPENCODE: n
+        run: /bin/bash "$HOME/ClaudeBalanceKit/uninstall.sh"
+
+      - name: 삭제 확인
+        run: |
+          test ! -e "$HOME/ClaudeBalanceKit"
+          test ! -e "$HOME/Library/LaunchAgents/com.claudebalancekit.opencode.plist"
+          test ! -e "$HOME/Desktop/OpenCode 열기.app"
+          if "$HOME/.opencode/bin/opencode" auth list --format json </dev/null | grep -q claude-balance-kit; then
+            echo "키가 남아 있음"; exit 1
+          fi
+          echo "삭제 확인 통과"
+
+      - name: OpenCode 없이 설치 (CBK_SKIP_OPENCODE=1)
+        env:
+          CBK_LOCAL_SOURCE: ${{ github.workspace }}
+          CBK_REPO: ${{ github.repository }}
+          CBK_SKIP_OPENCODE: "1"
+        run: |
+          /bin/bash install.sh
+          /bin/bash tests/mac/verify-install.sh skip-opencode
+
+  extension-browser:
+    name: 확장 동작 (크로미움 자동 조작)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Playwright 준비 (검사 전용, 확장에는 들어가지 않음)
+        run: |
+          npm install --no-save --no-package-lock playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - name: 확장 동작 시험 (가짜 API · 가짜 결제 페이지)
+        run: node tests/e2e/extension-e2e.js tests/screenshots
+      - name: 스크린샷 보관
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-screenshots
+          path: tests/screenshots

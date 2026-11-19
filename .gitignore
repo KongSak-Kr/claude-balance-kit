@@ -1,0 +1,18 @@
+# 키·개인정보가 든 파일은 절대 올리지 않음
+.env
+*.key
+auth.json
+auth.json.bak-*
+*.pem
+
+# 운영체제 · 편집기
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# 테스트 부산물
+node_modules/
+*.log
+tests/screenshots/

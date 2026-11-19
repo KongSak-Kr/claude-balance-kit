@@ -1,0 +1,16 @@
+#!/bin/bash
+DB="$HOME/.fake-opencode-creds.json"
+case "$1 $2" in
+  "--version "*) echo "2.3.2" ;;
+  "debug paths") echo "$HOME/.local/share/opencode" ;;
+  "auth import")
+    [ -t 0 ] && { echo "Pipe auth export output into stdin" >&2; exit 1; }
+    cat > "$DB.in"; node -e 'const fs=require("fs");const a=JSON.parse(fs.readFileSync(process.argv[1]));if(!Array.isArray(a)||a[0].integrationID!=="anthropic"||a[0].value.type!=="key")process.exit(3);fs.writeFileSync(process.argv[2],JSON.stringify(a));' "$DB.in" "$DB" || exit 1
+    rm -f "$DB.in"; echo "Imported 1 credential" >&2 ;;
+  "auth logout") [ -f "$DB" ] && grep -q "$4" "$DB" && { rm -f "$DB"; exit 0; }; echo "not found" >&2; exit 1 ;;
+  "auth switch") [ -f "$DB" ] || exit 1 ;;
+  "auth list") if [ -f "$DB" ]; then echo '[{"id":"anthropic","name":"Anthropic","connections":[{"type":"credential","label":"claude-balance-kit"}]}]'; else echo '[]'; fi ;;
+  "service start") echo "http://127.0.0.1:49374" ;;
+  "uninstall --force") echo "removed" ;;
+  *) echo "fake opencode: $*" >&2 ;;
+esac

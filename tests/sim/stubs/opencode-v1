@@ -1,0 +1,2 @@
+#!/bin/bash
+case "$1" in --version) echo "1.19.6" ;; *) echo "fake opencode v1: $*" >&2 ;; esac

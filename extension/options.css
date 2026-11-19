@@ -1,0 +1,115 @@
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 28px 20px 40px;
+  font-size: 14px;
+}
+
+h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-top: 16px;
+}
+
+.card p {
+  margin: 0 0 10px;
+}
+
+label {
+  display: block;
+  margin: 12px 0 4px;
+  font-weight: 500;
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  margin-top: 4px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+input[type="password"],
+input[type="text"],
+input[type="number"],
+input[type="date"],
+select {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+#admin-key {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+input.short {
+  width: 90px;
+}
+
+.prefix {
+  color: var(--muted);
+}
+
+.warn-box {
+  margin: 4px 0 6px;
+  font-size: 13px;
+}
+
+.result {
+  margin-top: 10px;
+}
+
+.result:empty {
+  display: none;
+}
+
+details {
+  margin-top: 14px;
+}
+
+summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+details ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.save-row {
+  margin-top: 20px;
+}
+
+.footer {
+  margin-top: 24px;
+}

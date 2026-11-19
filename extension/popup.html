@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>Claude 잔액</title>
+    <link rel="stylesheet" href="common.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Claude 잔액</h1>
+      <button id="open-options" class="icon-btn" type="button" title="설정 열기">설정</button>
+    </header>
+
+    <div id="low-banner" class="banner msg-warn hidden"></div>
+
+    <section aria-live="polite">
+      <div id="balance" class="balance stale">—</div>
+      <div id="balance-when" class="when"></div>
+      <div id="balance-status" class="status"></div>
+    </section>
+
+    <section>
+      <div class="label">사용액</div>
+      <div id="no-key" class="hidden">
+        <div class="note">관리자 키를 넣으면 사용액이 보입니다.</div>
+        <button id="open-options-2" type="button" style="margin-top: 6px">설정 열기</button>
+      </div>
+      <div id="usage-rows" class="rows">
+        <div class="k">오늘</div>
+        <div id="u-today" class="v">—</div>
+        <div class="k">이번 주</div>
+        <div id="u-week" class="v">—</div>
+        <div class="k">이번 달</div>
+        <div id="u-month" class="v">—</div>
+      </div>
+      <div id="usage-note" class="note" style="margin-top: 6px"></div>
+    </section>
+
+    <section>
+      <div class="recharge">
+        <div>
+          <div class="label">최근 충전일</div>
+          <div id="recharge-date">—</div>
+        </div>
+        <div id="recharge-src" class="src"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="actions">
+        <button id="recheck" type="button">다시 확인</button>
+        <button id="open-billing" class="primary" type="button">결제 페이지 열기</button>
+      </div>
+    </section>
+
+    <script src="lib/core.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

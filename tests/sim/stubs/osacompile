@@ -1,0 +1,4 @@
+#!/bin/bash
+# osacompile -o <app> -e <script>
+out=""; while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift 2;; -e) printf '%s\n' "$2" > /tmp/.osa_last; shift 2;; *) shift;; esac; done
+mkdir -p "$out/Contents" && cp /tmp/.osa_last "$out/Contents/script.txt"

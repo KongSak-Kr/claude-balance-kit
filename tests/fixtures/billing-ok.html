@@ -1,0 +1,29 @@
+<!-- 로그인된 결제 페이지 모형 : 실제 화면(2026-11)의 제목·문구 구조를 따라 만든 샘플. 금액·번호는 가짜. -->
+<html><body>
+<nav><div>Spending &amp; usage</div><ul><li>Overview</li><li>Cost</li><li>Billing</li><li>Spend limits</li></ul></nav>
+<main>
+<div><h1>Billing</h1></div>
+<section>
+  <div><h2><span>Credit balance</span></h2><div></div>
+  <div>Credits are used by the API, Claude Code, and playground. Buy credits as needed or set up auto-reload.</div></div>
+  <div data-cds="Card">
+    <div><span>$</span><span>42</span><span>.18</span></div>
+    <div><button>Buy credits</button><button>Manage auto-reload</button></div>
+    <p>Auto-reload is on. Your balance will be topped up to $50.00 when your balance falls below $10.00.</p>
+  </div>
+</section>
+<section>
+  <h2>Invoice history</h2>
+  <p>Invoices are issued when credits are purchased.</p>
+  <table>
+    <thead><tr><th>Date</th><th>Invoice number</th><th>Invoice type</th><th>Amount</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Nov 3, 2026</td><td>INV-0000-0012</td><td>Credit grant</td><td>$50.00</td><td>Paid</td></tr>
+      <tr><td>Oct 1, 2026</td><td>INV-0000-0010</td><td>Promotional credit</td><td>$5.00</td><td>Paid</td></tr>
+      <tr><td>Sep 12, 2026</td><td>INV-0000-0008</td><td>Credit grant</td><td>$25.00</td><td>Paid</td></tr>
+    </tbody>
+  </table>
+  <p>All dates are in UTC.</p>
+</section>
+</main>
+</body></html>

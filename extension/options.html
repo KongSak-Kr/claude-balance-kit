@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claude 잔액 키트 설정</title>
+    <link rel="stylesheet" href="common.css" />
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Claude 잔액 키트 설정</h1>
+      <p class="note">설정은 이 컴퓨터의 크롬 안에만 저장됩니다(다른 기기와 동기화하지 않음).</p>
+
+      <section class="card">
+        <h2>1. 관리자 키</h2>
+        <p>사용액(오늘 · 이번 주 · 이번 달)을 가져오는 데 씁니다. 잔액 자체는 결제 페이지에서 읽습니다.</p>
+        <div class="msg-warn warn-box">
+          <strong>주의 :</strong> 관리자 키는 조직 전체를 관리할 수 있는 키입니다. 이 확장은 이 컴퓨터 안에만 저장하며,
+          확장 폴더를 남에게 주지 마세요.
+        </div>
+
+        <label for="admin-key">관리자 키 (sk-ant-admin 으로 시작)</label>
+        <div class="row">
+          <input id="admin-key" type="password" autocomplete="off" spellcheck="false" placeholder="여기에 붙여 넣기" />
+          <button id="toggle-key" type="button">보이기</button>
+        </div>
+        <div class="row">
+          <button id="test-key" class="primary" type="button">연결 확인</button>
+          <button id="delete-key" type="button">저장된 키 삭제</button>
+        </div>
+        <div id="key-saved" class="note"></div>
+        <div id="key-result" class="result" aria-live="polite"></div>
+
+        <details>
+          <summary>관리자 키 받는 방법</summary>
+          <ol>
+            <li>조직 관리자(admin) 계정으로 <a id="admin-keys-link" target="_blank" rel="noopener">Claude Console 관리자 키 화면</a>을 엽니다.</li>
+            <li><strong>Create admin key</strong>(관리자 키 만들기)를 누르고 이름을 정합니다(예 : 잔액 확장).</li>
+            <li>나타난 키를 복사해 위 칸에 붙여 넣고 <strong>연결 확인</strong>을 누릅니다. 키는 한 번만 보입니다.</li>
+          </ol>
+          <p class="note">
+            개인(Individual) 계정은 관리자 키를 만들 수 없어서 먼저 콘솔의 Organization 화면에서 조직을 설정해야 합니다.
+            자세한 내용 : <a id="manual-link" target="_blank" rel="noopener">설치안내서 6단계</a>
+          </p>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>2. 잔액 부족 알림</h2>
+        <label class="check"><input id="alert-enabled" type="checkbox" /> 잔액 부족 알림 켜기</label>
+        <label for="threshold">알림 기준 금액 (달러)</label>
+        <div class="row">
+          <span class="prefix">$</span>
+          <input id="threshold" type="number" min="0" step="1" inputmode="decimal" class="short" />
+        </div>
+        <p class="note">
+          마지막으로 확인한 잔액에서 그 뒤 사용액을 빼서 추정합니다. 추정 잔액이 기준 이하이면 툴바 아이콘에 작은 빨간
+          <strong>!</strong> 표시가 붙고 알림이 한 번 뜹니다. 충전되면 알림이 다시 켜집니다.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>3. 사용액 갱신 주기</h2>
+        <select id="refresh-minutes">
+          <option value="15">15분마다 (기본)</option>
+          <option value="30">30분마다</option>
+          <option value="60">1시간마다</option>
+        </select>
+        <p class="note">이 주기마다 비용 조회를 한 번만 하고 바로 쉽니다. 잔액은 툴바 버튼을 눌렀을 때만 확인합니다.</p>
+      </section>
+
+      <section class="card">
+        <h2>4. 최근 충전일 직접 입력</h2>
+        <p class="note">결제 페이지에서 충전일을 자동으로 못 읽을 때만 넣으세요.</p>
+        <div class="row">
+          <input id="manual-date" type="date" />
+          <button id="clear-date" type="button">지우기</button>
+        </div>
+      </section>
+
+      <div class="row save-row">
+        <button id="save-settings" class="primary" type="button">설정 저장</button>
+        <span id="save-result" class="note" aria-live="polite"></span>
+      </div>
+
+      <p class="note footer">
+        이 확장은 api.anthropic.com(사용액 조회)과 platform.claude.com(결제 페이지) 외에는 어디에도 데이터를 보내지 않습니다.
+      </p>
+    </main>
+
+    <script src="kit-config.js"></script>
+    <script src="lib/core.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

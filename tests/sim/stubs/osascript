@@ -1,0 +1,12 @@
+#!/bin/bash
+# 사용 : osascript -l JavaScript -e <code> <mode> <file>
+args=(); while [ $# -gt 0 ]; do case "$1" in -l) shift 2;; -e) shift 2;; *) args+=("$1"); shift;; esac; done
+exec node -e '
+const fs=require("fs"); const [mode,file]=process.argv.slice(1);
+let data={}; if (fs.existsSync(file)) { const t=fs.readFileSync(file,"utf8"); if (t.trim()) data=JSON.parse(t); }
+if (typeof data!=="object"||data===null||Array.isArray(data)) { console.error("not object"); process.exit(1); }
+if (mode==="has") { console.log("anthropic" in data ? "yes":"no"); process.exit(0); }
+if (mode==="set") { const k=fs.readFileSync(0,"utf8").replace(/\s/g,""); if(!k){process.exit(1)} data.anthropic={type:"api",key:k}; }
+else if (mode==="remove") { if(!("anthropic" in data)){console.log("absent");process.exit(0)} delete data.anthropic; }
+fs.writeFileSync(file, JSON.stringify(data,null,2)+"\n", {mode:0o600}); console.log("ok");
+' "${args[@]}"

@@ -1,0 +1,4 @@
+# 윈도우에서 작업해도 맥에서 돌아가도록 줄바꿈을 LF 로 고정
+* text=auto eol=lf
+*.sh text eol=lf
+*.png binary
