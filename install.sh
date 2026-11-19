@@ -21,6 +21,7 @@
 #   CBK_SKIP_VALIDATE=1   키 확인 요청 생략   CBK_SKIP_OPENCODE=1  OpenCode 설치·등록 생략
 #   CBK_AUTOSTART=y|n     자동 실행 여부      CBK_UPDATE_KEY=y|n   업데이트 모드에서 키 재입력
 #   CBK_LOCAL_SOURCE=경로 확장 파일을 내려받지 않고 이 폴더에서 복사
+#   CBK_ARCHIVE_URL=주소  저장소 압축 파일 주소를 바꿔 시험(file:// 가능)
 #   CBK_NO_OPEN=1         Finder·크롬 창 열지 않음
 # ────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -215,7 +216,7 @@ check_machine() {
     die "질문에 답할 터미널을 찾지 못했습니다. 터미널 앱에서 직접 실행해 주세요."
   fi
   command -v curl >/dev/null 2>&1 || die "curl 명령이 없습니다."
-  command -v unzip >/dev/null 2>&1 || die "unzip 명령이 없습니다."
+  command -v tar >/dev/null 2>&1 || die "tar 명령이 없습니다."
 
   TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/cbk.XXXXXX")"
   chmod 700 "$TMP_DIR"
@@ -640,19 +641,22 @@ setup_autostart() {
 
 # ── 6. 크롬 확장 준비 ──────────────────────────────────────────────
 fetch_extension() {
-  local src_root="" zip new
+  local src_root="" archive url new
   if [ -n "${CBK_LOCAL_SOURCE:-}" ]; then
     src_root="$CBK_LOCAL_SOURCE"
     info "확장 파일을 이 폴더에서 복사합니다 : $src_root"
   else
     printf '%s' "$CBK_REPO" | grep -Eq '^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$' || die "저장소 이름 형식 오류 : $CBK_REPO"
-    zip="$TMP_DIR/kit.zip"
+    # zip 대신 tar.gz : 맥 기본 unzip 은 한글 파일 이름(설치안내서.md 등)을 깨뜨려 풀기에 실패한다.
+    archive="$TMP_DIR/kit.tar.gz"
+    url="${CBK_ARCHIVE_URL:-https://github.com/$CBK_REPO/archive/refs/heads/$CBK_BRANCH.tar.gz}"
     info "확장 파일 내려받는 중…"
-    curl -fsSL --max-time 120 "https://github.com/$CBK_REPO/archive/refs/heads/$CBK_BRANCH.zip" -o "$zip" ||
+    curl -fsSL --max-time 120 "$url" -o "$archive" </dev/null ||
       die "확장 파일을 내려받지 못했습니다(인터넷 또는 저장소 주소 확인 : $CBK_REPO)."
     mkdir -p "$TMP_DIR/src"
-    unzip -q "$zip" -d "$TMP_DIR/src" || die "내려받은 파일을 풀지 못했습니다."
-    rm -f "$zip"
+    # 표준입력을 막아 둔다(curl | bash 로 실행 중이면 표준입력이 이 스크립트 자체다).
+    tar -xzf "$archive" -C "$TMP_DIR/src" </dev/null || die "내려받은 파일을 풀지 못했습니다."
+    rm -f "$archive"
     for d in "$TMP_DIR"/src/*; do
       if [ -f "$d/extension/manifest.json" ]; then src_root="$d"; fi
     done

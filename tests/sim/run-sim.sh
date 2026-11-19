@@ -130,6 +130,17 @@ run_install || { cat "$H/out.txt"; exit 1; }
 CBK_REMOVE_KEY=y run_uninstall || { cat "$H/out-uninstall.txt"; exit 1; }
 check "OpenCode 에서 키 이름으로 로그아웃" test ! -f "$H/.fake-opencode-creds.json"
 
+echo "▶ I. 저장소 압축 파일(tar.gz, 한글 파일 이름 포함)을 내려받아 설치 — curl | bash 처럼 표준입력이 스크립트"
+new_home i
+git -C "$ROOT" archive --format=tar.gz --prefix=claude-balance-kit-main/ HEAD >"$WORK/kit.tar.gz"
+# shellcheck disable=SC2002  # curl | bash 처럼 파이프로 넘기려는 것
+cat "$ROOT/install.sh" | HOME="$H" PATH="$H/bin:$PATH" CBK_ALLOW_NON_MAC=1 CBK_NONINTERACTIVE=1 \
+  CBK_API_KEY="$KEY" CBK_SKIP_VALIDATE=1 CBK_SKIP_OPENCODE=1 CBK_REPO="tester/claude-balance-kit" \
+  CBK_ARCHIVE_URL="file://$WORK/kit.tar.gz" bash >"$H/out.txt" 2>&1 || { cat "$H/out.txt"; exit 1; }
+check "내려받은 확장 manifest" test -f "$H/ClaudeBalanceKit/extension/manifest.json"
+check "한글 이름 설치안내서 그대로" test -f "$H/ClaudeBalanceKit/manual/설치안내서.md"
+check "요약까지 끝까지 실행(표준입력을 먹지 않음)" grep -q "설치 요약" "$H/out.txt"
+
 echo
 printf '모의 실행 결과 : 통과 %d · 실패 %d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
