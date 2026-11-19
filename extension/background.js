@@ -181,7 +181,7 @@ let pending = null; // { tabId, done }
 
 async function currentEstimate() {
   const { balance, usage } = await get(['balance', 'usage']);
-  return C.estimateBalance(balance, usage);
+  return C.estimateBalance(balance, usage, await loadSettings());
 }
 
 // 서비스 워커가 확인 도중 꺼졌다 켜졌다면, 남아 있는 확인용 탭을 정리한다.
@@ -237,10 +237,38 @@ async function runCheck() {
   await finishCheck(result, prevEstimate, 'button');
 }
 
+const money = (v) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 100) / 100 : null);
+const dateKey = (v) => (typeof v === 'string' && DATE_KEY.test(v) ? v : null);
+const shortText = (v, n) => (typeof v === 'string' && v ? v.slice(0, n) : null);
+
+// 콘텐츠 스크립트가 보낸 값은 모양을 다시 확인해서 저장한다
+function cleanPromo(p) {
+  if (!p || typeof p !== 'object' || money(p.total) === null) return null;
+  const items = Array.isArray(p.items) ? p.items.slice(0, 10) : [];
+  return {
+    total: money(p.total),
+    count: Number.isInteger(p.count) && p.count >= 0 ? p.count : 0,
+    nextExpiry: dateKey(p.nextExpiry),
+    nextExpiryAmount: money(p.nextExpiryAmount),
+    latestGranted: dateKey(p.latestGranted),
+    items: items.map((x) => ({
+      name: shortText(x && x.name, 60),
+      remaining: money(x && x.remaining),
+      granted: money(x && x.granted),
+      expires: dateKey(x && x.expires),
+      grantedAt: dateKey(x && x.grantedAt),
+      appliesTo: shortText(x && x.appliesTo, 80),
+      expired: Boolean(x && x.expired),
+    })),
+  };
+}
+
 function cleanResult(r) {
   const out = { status: typeof r.status === 'string' ? r.status : 'parse_failed' };
-  if (typeof r.balance === 'number' && Number.isFinite(r.balance)) out.balance = Math.round(r.balance * 100) / 100;
-  if (typeof r.latestRecharge === 'string' && DATE_KEY.test(r.latestRecharge)) out.latestRecharge = r.latestRecharge;
+  if (money(r.balance) !== null) out.balance = money(r.balance);
+  const promo = cleanPromo(r.promo);
+  if (promo) out.promo = promo;
+  if (dateKey(r.latestRecharge)) out.latestRecharge = r.latestRecharge;
   return out;
 }
 
@@ -252,16 +280,25 @@ async function finishCheck(rawResult, prevEstimate, source) {
   const recharge = st.recharge || {};
   if (result.latestRecharge) recharge.history = { date: result.latestRecharge, seenAt: now };
 
-  if (result.status === 'ok' && typeof result.balance === 'number') {
+  if (result.promo && result.promo.latestGranted) recharge.promo = { date: result.promo.latestGranted, seenAt: now };
+
+  if (result.status === 'ok' && (typeof result.balance === 'number' || result.promo)) {
     const alert = st.alert || {};
-    const recharged = C.detectRecharge(prevEstimate, result.balance, 1);
+    const balance = {
+      value: typeof result.balance === 'number' ? result.balance : null,
+      promo: result.promo || null,
+      measuredAt: now,
+      source: source,
+    };
+    const measured = C.primaryOf(balance, settings).value;
+    const recharged = C.detectRecharge(prevEstimate, measured, 1);
     if (recharged) {
-      recharge.auto = { date: C.localDateKey(now), amount: Math.round((result.balance - prevEstimate) * 100) / 100 };
+      recharge.auto = { date: C.localDateKey(now), amount: Math.round((measured - prevEstimate) * 100) / 100 };
     }
     // 충전되었거나 기준보다 많으면 알림 상태 초기화
-    if (recharged || !C.isLow(result.balance, settings)) alert.notified = false;
+    if (recharged || !C.isLow(measured, settings)) alert.notified = false;
     await set({
-      balance: { value: result.balance, measuredAt: now, source: source },
+      balance: balance,
       recharge: recharge,
       alert: alert,
       balanceStatus: { state: 'ok', at: now, source: source },
@@ -317,8 +354,9 @@ async function evaluateAlertNow() {
   const settings = await loadSettings();
   const { balance, usage, alert } = await get(['balance', 'usage', 'alert']);
   const a = alert || {};
-  const est = C.estimateBalance(balance, usage);
+  const est = C.estimateBalance(balance, usage, settings);
   const low = C.isLow(est, settings);
+  const label = C.primaryOf(balance, settings).label;
   if (low) {
     await chrome.action.setBadgeBackgroundColor({ color: '#C62828' });
     if (chrome.action.setBadgeTextColor) await chrome.action.setBadgeTextColor({ color: '#FFFFFF' });
@@ -333,7 +371,7 @@ async function evaluateAlertNow() {
           iconUrl: 'icons/icon128.png',
           title: 'Claude 잔액 부족 알림',
           message:
-            '추정 잔액이 기준(' + C.formatUSD(settings.threshold) + ') 이하입니다. 툴바의 잔액 버튼을 눌러 실제 잔액을 확인해 보세요.',
+            '추정 ' + label + '이 기준(' + C.formatUSD(settings.threshold) + ') 이하입니다. 툴바의 잔액 버튼을 눌러 실제 잔액을 확인해 보세요.',
           priority: 1,
         })
         .catch(() => {}); // 운영체제 알림이 꺼져 있어도 배지는 남는다

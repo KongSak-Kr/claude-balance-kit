@@ -37,10 +37,32 @@ function renderBalance(now) {
   const b = state.balance;
   const st = state.balanceStatus || {};
   const checking = isChecking(now);
+  const settings = C.normalizeSettings(state.settings);
+  const primary = C.primaryOf(b, settings);
+  const secondary = C.secondaryOf(b, settings);
+  $('balance-label').textContent = b ? primary.label : '잔액';
   const el = $('balance');
-  el.textContent = b ? C.formatUSD(b.value) : '—';
+  el.textContent = b && typeof primary.value === 'number' ? C.formatUSD(primary.value) : '—';
   const fresh = b && !checking && st.state === 'ok' && st.at === b.measuredAt;
   el.classList.toggle('stale', !fresh);
+
+  const sub = $('balance-sub');
+  sub.classList.toggle('hidden', !secondary);
+  if (secondary) sub.textContent = secondary.label + ' ' + C.formatUSD(secondary.value);
+
+  // 프로모션 크레딧 만료 안내 (가장 빨리 만료되는 것)
+  const note = $('promo-note');
+  const promo = b && C.hasPromo(b) ? b.promo : null;
+  const showNote = Boolean(promo && promo.nextExpiry);
+  note.classList.toggle('hidden', !showNote);
+  if (showNote) {
+    let t = '프로모션 만료 ' + C.formatDateKeyKo(promo.nextExpiry);
+    if (typeof promo.nextExpiryAmount === 'number' && promo.count > 1) t += ' (' + C.formatUSD(promo.nextExpiryAmount) + ')';
+    if (promo.count > 1) t += ' · ' + promo.count + '건';
+    const days = Math.round((Date.parse(promo.nextExpiry + 'T00:00:00') - C.startOfLocalDay(now)) / C.DAY);
+    if (days >= 0 && days <= 30) t += ' · ' + (days === 0 ? '오늘' : days + '일 남음');
+    note.textContent = t;
+  }
 
   const when = $('balance-when');
   if (b) {
@@ -122,8 +144,9 @@ function renderBanner() {
   const el = $('low-banner');
   el.classList.toggle('hidden', !low);
   if (low) {
+    const label = C.primaryOf(state.balance, settings).label;
     el.textContent =
-      '추정 잔액이 기준(' + C.formatUSD(settings.threshold) + ') 이하일 수 있습니다. 결제 페이지에서 잔액과 충전 여부를 확인해 보세요.';
+      '추정 ' + label + '이 기준(' + C.formatUSD(settings.threshold) + ') 이하일 수 있습니다. 결제 페이지에서 잔액과 충전 여부를 확인해 보세요.';
   }
 }
 

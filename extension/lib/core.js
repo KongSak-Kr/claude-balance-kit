@@ -17,6 +17,7 @@
   const ADMIN_KEY_PREFIX = 'sk-ant-admin';
 
   const DEFAULT_SETTINGS = Object.freeze({
+    primary: 'promo', // 크게 보여 주고 알림 기준으로 쓸 잔액 : promo(프로모션 크레딧, 있으면) | credit(구매한 크레딧)
     alertEnabled: true,
     threshold: 5,
     refreshMinutes: 15,
@@ -125,15 +126,46 @@
     return out;
   }
 
-  // ── 추정 잔액 · 충전 감지 ─────────────────────────────────────────
-  /** 마지막 실측 잔액 − 실측 이후 사용액. 알림 판단용(화면 표시용 아님). */
-  function estimateBalance(balance, usage) {
-    if (!balance || typeof balance.value !== 'number') return null;
+  // ── 기준 잔액 · 추정 잔액 · 충전 감지 ─────────────────────────────────
+  const KIND_LABEL = { promo: '프로모션 크레딧', credit: '구매한 크레딧' };
+
+  function hasPromo(balance) {
+    return Boolean(balance && balance.promo && typeof balance.promo.total === 'number' && balance.promo.count > 0);
+  }
+
+  /**
+   * 크게 보여 줄 잔액(= 알림 기준). 설정이 promo 이고 프로모션 크레딧이 있으면 그 합계, 아니면 구매한 크레딧.
+   * 반환 { kind, label, value }
+   */
+  function primaryOf(balance, settings) {
+    const s = settings || DEFAULT_SETTINGS;
+    if (s.primary !== 'credit' && hasPromo(balance)) return { kind: 'promo', label: KIND_LABEL.promo, value: balance.promo.total };
+    const v = balance && typeof balance.value === 'number' ? balance.value : null;
+    if (v === null && hasPromo(balance)) return { kind: 'promo', label: KIND_LABEL.promo, value: balance.promo.total };
+    return { kind: 'credit', label: KIND_LABEL.credit, value: v };
+  }
+
+  /** 함께 작게 보여 줄 다른 잔액 (없으면 null) */
+  function secondaryOf(balance, settings) {
+    const p = primaryOf(balance, settings);
+    if (p.kind === 'promo') {
+      return balance && typeof balance.value === 'number' ? { kind: 'credit', label: KIND_LABEL.credit, value: balance.value } : null;
+    }
+    return hasPromo(balance) ? { kind: 'promo', label: KIND_LABEL.promo, value: balance.promo.total } : null;
+  }
+
+  /**
+   * 마지막 실측 잔액(기준 잔액) − 실측 이후 사용액. 알림 판단용(화면 표시용 아님).
+   * 프로모션 크레딧은 해당 모델 사용에 먼저 쓰이므로, 사용액을 모두 빼는 쪽(보수적인 추정)으로 계산한다.
+   */
+  function estimateBalance(balance, usage, settings) {
+    const p = primaryOf(balance, settings);
+    if (typeof p.value !== 'number') return null;
     let spent = 0;
     if (usage && usage.forMeasuredAt === balance.measuredAt && typeof usage.sinceMeasuredCents === 'number') {
       spent = usage.sinceMeasuredCents / 100;
     }
-    return Math.round((balance.value - spent) * 100) / 100;
+    return Math.round((p.value - spent) * 100) / 100;
   }
 
   /** 새 실측값이 직전 추정값보다 $1 이상 늘었으면 충전으로 본다. */
@@ -142,13 +174,14 @@
     return measured - prevEstimate >= (minIncrease || 1);
   }
 
-  const RECHARGE_SOURCE_LABEL = { auto: '자동 감지', history: '결제 내역', manual: '직접 입력' };
+  const RECHARGE_SOURCE_LABEL = { auto: '자동 감지', history: '결제 내역', manual: '직접 입력', promo: '프로모션 지급일' };
 
   /** 세 출처 중 가장 최근 날짜. 같은 날이면 결제 내역 > 직접 입력 > 자동 감지 순. */
   function pickLatestRecharge(recharge, manualDate) {
     const list = [];
     if (recharge && recharge.history && recharge.history.date) list.push({ date: recharge.history.date, source: 'history', rank: 3 });
     if (manualDate) list.push({ date: manualDate, source: 'manual', rank: 2 });
+    if (recharge && recharge.promo && recharge.promo.date) list.push({ date: recharge.promo.date, source: 'promo', rank: 1.5 });
     if (recharge && recharge.auto && recharge.auto.date) list.push({ date: recharge.auto.date, source: 'auto', rank: 1 });
     if (!list.length) return null;
     list.sort((a, b) => (a.date === b.date ? b.rank - a.rank : a.date < b.date ? 1 : -1));
@@ -282,6 +315,7 @@
 
   function normalizeSettings(raw) {
     const s = Object.assign({}, DEFAULT_SETTINGS, raw || {});
+    s.primary = s.primary === 'credit' ? 'credit' : 'promo';
     s.alertEnabled = s.alertEnabled !== false;
     const th = Number(s.threshold);
     s.threshold = Number.isFinite(th) && th >= 0 ? th : DEFAULT_SETTINGS.threshold;
@@ -314,6 +348,9 @@
     costHeaders,
     summarizeCost,
     estimateBalance,
+    primaryOf,
+    secondaryOf,
+    hasPromo,
     detectRecharge,
     pickLatestRecharge,
     isLow,

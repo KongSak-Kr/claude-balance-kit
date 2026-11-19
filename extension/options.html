@@ -25,7 +25,17 @@
       </section>
 
       <section class="card">
-        <h2>1. 관리자 키</h2>
+        <h2>1. 크게 보여 줄 잔액</h2>
+        <label class="check"><input type="radio" name="primary" value="promo" /> 프로모션 크레딧 (있으면 이걸 크게, 기본)</label>
+        <label class="check"><input type="radio" name="primary" value="credit" /> 구매한 크레딧 (Credit balance)</label>
+        <p class="note">
+          고른 잔액이 툴바 버튼의 큰 숫자와 「잔액 부족 알림」 기준이 돼요. 다른 하나는 그 아래 작게 보여요. 프로모션 크레딧이 없으면
+          구매한 크레딧을 보여 줘요.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>2. 관리자 키</h2>
         <p>사용액(오늘 · 이번 주 · 이번 달)을 가져오는 데 씁니다. 잔액 자체는 결제 페이지에서 읽습니다.</p>
         <div class="msg-warn warn-box">
           <strong>주의 :</strong> 관리자 키는 조직 전체를 관리할 수 있는 키입니다. 이 확장은 이 컴퓨터 안에만 저장하며,
@@ -59,7 +69,7 @@
       </section>
 
       <section class="card">
-        <h2>2. 잔액 부족 알림</h2>
+        <h2>3. 잔액 부족 알림</h2>
         <label class="check"><input id="alert-enabled" type="checkbox" /> 잔액 부족 알림 켜기</label>
         <label for="threshold">알림 기준 금액 (달러)</label>
         <div class="row">
@@ -67,13 +77,13 @@
           <input id="threshold" type="number" min="0" step="1" inputmode="decimal" class="short" />
         </div>
         <p class="note">
-          마지막으로 확인한 잔액에서 그 뒤 사용액을 빼서 추정합니다. 추정 잔액이 기준 이하이면 툴바 아이콘에 작은 빨간
+          마지막으로 확인한 잔액(1번에서 고른 것)에서 그 뒤 사용액을 빼서 추정합니다. 추정 잔액이 기준 이하이면 툴바 아이콘에 작은 빨간
           <strong>!</strong> 표시가 붙고 알림이 한 번 뜹니다. 충전되면 알림이 다시 켜집니다.
         </p>
       </section>
 
       <section class="card">
-        <h2>3. 사용액 갱신 주기</h2>
+        <h2>4. 사용액 갱신 주기</h2>
         <select id="refresh-minutes">
           <option value="15">15분마다 (기본)</option>
           <option value="30">30분마다</option>
@@ -83,7 +93,7 @@
       </section>
 
       <section class="card">
-        <h2>4. 최근 충전일 직접 입력</h2>
+        <h2>5. 최근 충전일 직접 입력</h2>
         <p class="note">결제 페이지에서 충전일을 자동으로 못 읽을 때만 넣으세요.</p>
         <div class="row">
           <input id="manual-date" type="date" />

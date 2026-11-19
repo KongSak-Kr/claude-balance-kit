@@ -530,8 +530,12 @@
         </ol>
         <figure class="small">
           <img src="img/popup-basic.png" alt="잔액이 보이는 작은 창" />
-          <figcaption>실제 화면 — $ 아이콘을 누르면 나오는 창</figcaption>
+          <figcaption>실제 화면(예시 금액) — $ 아이콘을 누르면 나오는 창</figcaption>
         </figure>
+        <div class="tip">
+          <strong>프로모션 크레딧</strong>이 있으면 그 금액(남은 프로모션 크레딧 합계)이 크게 나오고, 직접 산 크레딧은 「구매한 크레딧」으로 그
+          아래 작게 나와요. 가장 빨리 만료되는 날짜도 같이 보여요. 반대로 보고 싶으면 설정 1번에서 「구매한 크레딧」을 고르세요.
+        </div>
         <div class="tip">잔액을 확인할 때 결제 화면 탭이 잠깐 열렸다 닫혀요. 정상이에요.</div>
         <p>다음 질문 「지금 관리자 키를 넣을까요?」는 잘 모르면 그냥 <span class="key">return</span> 을 누르세요. 그러면 설치가 끝나요.</p>
         <figure>
@@ -552,7 +556,7 @@
           <li><span class="btn-name">Create admin key</span> → 이름 칸에 <strong>잔액확장</strong> → <span class="btn-name">Add</span></li>
           <li><strong>sk-ant-admin</strong> 으로 시작하는 키 옆 <span class="btn-name">Copy</span></li>
           <li>크롬의 「Claude 잔액 키트 설정」 탭으로 가세요. 없으면 <strong>$</strong> 아이콘 → 오른쪽 위 <strong>설정</strong>.</li>
-          <li>「관리자 키」 칸(①)을 누르고 <span class="key">⌘</span> + <span class="key">V</span> → <span class="btn-name">연결 확인</span>(②)</li>
+          <li>「2. 관리자 키」 칸(①)을 누르고 <span class="key">⌘</span> + <span class="key">V</span> → <span class="btn-name">연결 확인</span>(②)</li>
           <li>초록 글씨로 「연결됨」이 나오면 끝이에요.</li>
         </ol>
         <figure>
@@ -570,7 +574,8 @@
       <h2 class="divider" id="daily">매일 쓰는 법</h2>
       <div class="box">
         <ul>
-          <li><strong>잔액 보기</strong> : 크롬 오른쪽 위 청록색 <strong>$</strong> 아이콘을 누르세요. 누를 때마다 새로 확인해요.</li>
+          <li><strong>잔액 보기</strong> : 크롬 오른쪽 위 청록색 <strong>$</strong> 아이콘을 누르세요. 누를 때마다 새로 확인해요. 프로모션 크레딧이 있으면 그게 큰 숫자예요.</li>
+          <li><strong>프로모션 크레딧 만료</strong> : 큰 숫자 아래 「프로모션 만료 ○월 ○일」을 보세요. 30일 안으로 남으면 「○일 남음」도 붙어요.</li>
           <li><strong>OpenCode 쓰기</strong> : 바탕화면의 <strong>OpenCode 열기</strong> 아이콘을 두 번 누르세요. 크롬에 OpenCode 가 열려요.</li>
           <li>
             <strong>잔액 부족 알림</strong>(관리자 키를 넣은 경우) : 잔액이 $5 아래로 내려간 것 같으면 $ 아이콘에 작은 빨간
@@ -643,6 +648,10 @@
       <details>
         <summary>$ 아이콘을 눌렀더니 「콘솔 로그인 필요」가 나와요</summary>
         <p>크롬에서 platform.claude.com 에 로그인되어 있지 않아요. 결제 화면(「결제 페이지 열기」 버튼)에서 로그인한 뒤 다시 $ 아이콘을 누르세요.</p>
+      </details>
+      <details>
+        <summary>프로모션 크레딧이 안 보여요</summary>
+        <p>결제 화면(「결제 페이지 열기」)에 「Promotional credits」 표가 있는지 보세요. 표가 있는데도 큰 숫자가 「구매한 크레딧」이면 설정 1번이 「프로모션 크레딧」으로 되어 있는지 확인하고, $ 아이콘 → 「다시 확인」을 누르세요. 만료된 프로모션은 합계에서 빠져요.</p>
       </details>
       <details>
         <summary>「잔액을 읽지 못함」이 나와요</summary>

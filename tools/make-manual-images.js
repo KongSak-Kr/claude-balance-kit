@@ -149,10 +149,15 @@ async function shotExtensionPages(browser) {
   const id = sw.url().split('/')[2];
   const now = Date.now();
   const base = {
-    balance: { value: 42.18, measuredAt: now - 40000, source: 'button' },
+    balance: {
+      value: 0,
+      promo: { total: 41.75, count: 2, nextExpiry: '2026-12-31', nextExpiryAmount: 37.5, latestGranted: '2026-11-12', items: [] },
+      measuredAt: now - 40000,
+      source: 'button',
+    },
     balanceStatus: { state: 'ok', at: now - 40000, source: 'button' },
     lastCheckAt: now,
-    recharge: { history: { date: '2026-11-03', seenAt: now } },
+    recharge: { history: { date: '2026-11-03', seenAt: now }, promo: { date: '2026-11-12', seenAt: now } },
     alert: { low: false, notified: false },
   };
 
@@ -184,10 +189,10 @@ async function shotExtensionPages(browser) {
   // 3) 설정 화면 — 관리자 키 칸 표시
   await sw.evaluate(() => chrome.storage.local.remove(['adminKey', 'keySavedAt']));
   p = await ctx.newPage();
-  await p.setViewportSize({ width: 760, height: 1000 });
+  await p.setViewportSize({ width: 760, height: 1300 });
   await p.goto(`chrome-extension://${id}/options.html`);
   await p.waitForTimeout(600);
-  const opt = await p.screenshot({ clip: { x: 0, y: 0, width: 760, height: 720 } });
+  const opt = await p.screenshot({ clip: { x: 0, y: 0, width: 760, height: 980 } });
   const field = await p.evaluate(() => {
     const a = document.getElementById('admin-key').getBoundingClientRect();
     const b = document.getElementById('test-key').getBoundingClientRect();

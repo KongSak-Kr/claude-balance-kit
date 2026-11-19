@@ -1,0 +1,23 @@
+<!-- 프로모션 크레딧이 있는 결제 페이지 모형 : 실제 화면(2026-11)의 구역 제목 · 표 칸 · 문구 구조를 따라 만든 샘플. 금액은 가짜. -->
+<html><body><main>
+<div><h1>Billing</h1></div>
+<section>
+  <div><h2><span>Credit balance</span></h2>
+  <div>Credits are used by the API, Claude Code, and playground. Buy credits as needed or set up auto-reload.</div></div>
+  <div data-cds="Card"><div><span>$</span><span>0</span><span>.00</span></div><div><button>Buy credits</button></div></div>
+</section>
+<section>
+  <h2>Promotional credits</h2>
+  <div>Promotional credits granted to your organization. All dates are in UTC.</div>
+  <table aria-label="Promotional credits">
+    <thead><tr><th>Name</th><th>Remaining balance</th><th><span>Applies to<button aria-label="info"></button></span></th><th>Expires on</th><th>Date granted</th></tr></thead>
+    <tbody>
+      <tr><td>Startup program</td><td><div><svg></svg><span>$37.50 <span>of $50.00</span></span></div></td><td><div><span>Claude Opus 5.5, Claude Sonnet 5.5</span><span>API</span></div></td><td>Dec 31, 2026, 23:59 UTC</td><td>Nov 3, 2026</td></tr>
+      <tr><td>Promotional credit</td><td><span>$4.25 remaining</span></td><td>All models and products</td><td>Jan 15, 2027, 23:59 UTC</td><td>Oct 10, 2026</td></tr>
+      <tr><td>Event bonus</td><td><span>$10.00 <span>of $10.00</span></span></td><td>All models and products</td><td>Oct 31, 2026, 23:59 UTC</td><td>Sep 1, 2026</td></tr>
+    </tbody>
+  </table>
+</section>
+<section><h2>Invoice history</h2><table><thead><tr><th>Date</th><th>Invoice number</th><th>Invoice type</th><th>Amount</th><th>Status</th></tr></thead>
+<tbody><tr><td>Nov 3, 2026</td><td>INV-1</td><td>Credit grant</td><td>$50.00</td><td>Paid</td></tr></tbody></table></section>
+</main></body></html>

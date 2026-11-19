@@ -37,4 +37,21 @@ function htmlToText(html) {
     .join('\n');
 }
 
-module.exports = { htmlToText };
+/** 테스트용 : HTML 의 표를 확장의 content-billing.js 가 만드는 모양({ label, headers, rows })으로 */
+function htmlToTables(html) {
+  const strip = (x) => decode(x.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  const out = [];
+  for (const m of String(html).matchAll(/<table\b([^>]*)>([\s\S]*?)<\/table>/gi)) {
+    const label = (/aria-label="([^"]*)"/i.exec(m[1]) || [])[1] || '';
+    const headers = [...m[2].matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/gi)].map((x) => strip(x[1]));
+    const rows = [];
+    for (const r of m[2].matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const cells = [...r[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map((x) => strip(x[1]));
+      if (cells.length) rows.push(cells);
+    }
+    out.push({ label, headers, rows });
+  }
+  return out;
+}
+
+module.exports = { htmlToText, htmlToTables };

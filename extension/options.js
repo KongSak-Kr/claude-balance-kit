@@ -21,6 +21,7 @@ function setResult(el, kind, text) {
 async function loadAll() {
   const { adminKey, settings, keySavedAt } = await chrome.storage.local.get(['adminKey', 'settings', 'keySavedAt']);
   const s = C.normalizeSettings(settings);
+  for (const r of document.querySelectorAll('input[name="primary"]')) r.checked = r.value === s.primary;
   $('alert-enabled').checked = s.alertEnabled;
   $('threshold').value = String(s.threshold);
   $('refresh-minutes').value = String(s.refreshMinutes);
@@ -98,7 +99,9 @@ async function saveSettings() {
     return;
   }
   const date = $('manual-date').value || null;
+  const picked = document.querySelector('input[name="primary"]:checked');
   const settings = C.normalizeSettings({
+    primary: picked ? picked.value : 'promo',
     alertEnabled: $('alert-enabled').checked,
     threshold: th,
     refreshMinutes: Number($('refresh-minutes').value),

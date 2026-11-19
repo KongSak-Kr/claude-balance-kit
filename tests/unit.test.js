@@ -13,7 +13,7 @@ const path = require('node:path');
 
 const core = require('../extension/lib/core.js');
 const billing = require('../extension/lib/billing-parse.js');
-const { htmlToText } = require('./html-to-text.js');
+const { htmlToText, htmlToTables } = require('./html-to-text.js');
 
 const FIX = path.join(__dirname, 'fixtures');
 const BILLING_URL = 'https://platform.claude.com/settings/billing';
@@ -97,6 +97,47 @@ test('음수 잔액', () => {
 
 test('빈 화면은 loading 으로 본다(아직 그려지기 전)', () => {
   assert.equal(billing.parseBillingText('', { url: BILLING_URL }).status, 'loading');
+});
+
+test('프로모션 크레딧 : 표에서 남은 금액 합계 · 만료 지난 것 제외 · 가장 빠른 만료', () => {
+  const html = fs.readFileSync(path.join(FIX, 'billing-promo.html'), 'utf8');
+  const now = new Date('2026-11-19T12:00:00+09:00').getTime();
+  const r = billing.parseBillingText(htmlToText(html), { url: BILLING_URL, tables: htmlToTables(html), now: now });
+  assert.equal(r.status, 'ok');
+  assert.equal(r.balance, 0); // 구매한 크레딧
+  assert.equal(r.promo.total, 41.75); // 37.50 + 4.25 (10월 31일 만료된 $10 는 제외)
+  assert.equal(r.promo.count, 2);
+  assert.equal(r.promo.nextExpiry, '2026-12-31');
+  assert.equal(r.promo.nextExpiryAmount, 37.5);
+  assert.equal(r.promo.latestGranted, '2026-11-03');
+  const first = r.promo.items[0];
+  assert.equal(first.name, 'Startup program');
+  assert.equal(first.remaining, 37.5);
+  assert.equal(first.granted, 50);
+  assert.equal(r.promo.items[2].expired, true);
+  assert.equal(r.latestRecharge, '2026-11-03'); // 결제 내역의 Credit grant 는 그대로
+});
+
+test('프로모션 크레딧 : 표 구조 없이 글자만으로도 읽는다(예비 방법)', () => {
+  const now = new Date('2026-11-19T12:00:00+09:00').getTime();
+  const r = billing.parseBillingText(fixture('billing-promo.html'), { url: BILLING_URL, now: now });
+  assert.equal(r.promo.total, 41.75);
+  assert.equal(r.promo.nextExpiry, '2026-12-31');
+});
+
+test('프로모션 금액을 구매 크레딧 잔액으로 오인하지 않는다', () => {
+  // 구매 크레딧 카드가 아직 로딩 중이고 프로모션 표만 그려진 순간
+  const text = ['Billing', 'Credit balance', 'Loading', 'Promotional credits', 'Promotional credits granted to your organization.',
+    'Name\tRemaining balance\tApplies to\tExpires on\tDate granted', 'Promo\t$37.50 of $50.00\tAll models and products\tDec 31, 2026, 23:59 UTC\tNov 3, 2026'].join('\n');
+  const r = billing.parseBillingText(text, { url: BILLING_URL, now: new Date('2026-11-19T12:00:00+09:00').getTime() });
+  assert.equal(r.balance, null);
+  assert.equal(r.promo.total, 37.5);
+  assert.equal(r.status, 'ok');
+});
+
+test('프로모션 구역이 없으면 promo 는 null', () => {
+  const r = billing.parseBillingText(fixture('billing-ok.html'), { url: BILLING_URL });
+  assert.equal(r.promo, null);
 });
 
 test('날짜 형식 여러 가지', () => {
@@ -194,6 +235,22 @@ test('추정 잔액 = 실측 잔액 − 실측 이후 사용액 (같은 실측�
   assert.equal(core.estimateBalance(null, {}), null);
 });
 
+test('기준 잔액 : 프로모션이 있으면 프로모션, 설정으로 구매 크레딧 선택', () => {
+  const promo = { total: 41.75, count: 2, nextExpiry: '2026-12-31' };
+  const b = { value: 3, promo: promo, measuredAt: 1000 };
+  const s = core.normalizeSettings({});
+  assert.deepEqual(core.primaryOf(b, s), { kind: 'promo', label: '프로모션 크레딧', value: 41.75 });
+  assert.deepEqual(core.secondaryOf(b, s), { kind: 'credit', label: '구매한 크레딧', value: 3 });
+  const c = core.normalizeSettings({ primary: 'credit' });
+  assert.equal(core.primaryOf(b, c).value, 3);
+  assert.equal(core.secondaryOf(b, c).value, 41.75);
+  assert.equal(core.primaryOf({ value: 7 }, s).kind, 'credit'); // 프로모션이 없으면 구매 크레딧
+  assert.equal(core.primaryOf({ value: null, promo: promo }, c).kind, 'promo'); // 구매 크레딧을 못 읽었으면 프로모션
+  // 추정 잔액은 기준 잔액에서 사용액을 뺀다
+  assert.equal(core.estimateBalance(b, { sinceMeasuredCents: 175, forMeasuredAt: 1000 }, s), 40);
+  assert.equal(core.estimateBalance(b, { sinceMeasuredCents: 175, forMeasuredAt: 1000 }, c), 1.25);
+});
+
 test('충전 감지와 부족 판단', () => {
   assert.equal(core.detectRecharge(3.2, 53.2), true);
   assert.equal(core.detectRecharge(3.2, 3.9), false);
@@ -207,6 +264,8 @@ test('충전 감지와 부족 판단', () => {
 test('최근 충전일 고르기 : 가장 최근 날짜 + 출처', () => {
   const r = core.pickLatestRecharge({ auto: { date: '2026-11-10' }, history: { date: '2026-11-03' } }, '2026-11-05');
   assert.deepEqual(r, { date: '2026-11-10', source: 'auto', sourceLabel: '자동 감지' });
+  const promo = core.pickLatestRecharge({ promo: { date: '2026-11-12' }, history: { date: '2026-11-03' } }, null);
+  assert.deepEqual(promo, { date: '2026-11-12', source: 'promo', sourceLabel: '프로모션 지급일' });
   const same = core.pickLatestRecharge({ auto: { date: '2026-11-03' }, history: { date: '2026-11-03' } }, null);
   assert.equal(same.source, 'history');
   assert.equal(core.pickLatestRecharge({}, null), null);
@@ -250,7 +309,9 @@ test('금액 · 날짜 표시', () => {
 });
 
 test('설정 기본값과 보정', () => {
-  assert.deepEqual(core.normalizeSettings(undefined), { alertEnabled: true, threshold: 5, refreshMinutes: 15, manualRechargeDate: null });
+  assert.deepEqual(core.normalizeSettings(undefined), { primary: 'promo', alertEnabled: true, threshold: 5, refreshMinutes: 15, manualRechargeDate: null });
+  assert.equal(core.normalizeSettings({ primary: 'credit' }).primary, 'credit');
+  assert.equal(core.normalizeSettings({ primary: 'weird' }).primary, 'promo');
   const s = core.normalizeSettings({ threshold: '-3', refreshMinutes: 7, manualRechargeDate: 'yesterday' });
   assert.equal(s.threshold, 5);
   assert.equal(s.refreshMinutes, 15);

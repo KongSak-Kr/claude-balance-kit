@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Claude 잔액 키트",
   "short_name": "Claude 잔액",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "툴바 버튼을 누르면 Anthropic 콘솔의 크레딧 잔액을 확인하고, 사용액과 잔액 부족을 알려 줍니다.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "alarms", "notifications", "tabs"],

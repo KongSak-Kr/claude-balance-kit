@@ -7,9 +7,11 @@
  *   금액만 단독으로 적힌 줄($12.34)을 잔액으로 본다.
  * - 확실하지 않으면 숫자를 내지 않는다(틀린 숫자보다 "못 읽음"이 낫다).
  *
- * 입력 : 페이지 innerText(줄바꿈 \n, 표 칸 \t) 와 주소
- * 출력 : { status, balance, balanceText, recharges[], latestRecharge }
+ * 입력 : 페이지 innerText(줄바꿈 \n, 표 칸 \t) 와 주소, (있으면) 페이지의 표들 { label, headers[], rows[][] }
+ * 출력 : { status, balance, balanceText, promo, recharges[], latestRecharge }
  *   status : ok | login_required | loading | label_not_found | amount_not_found
+ *   balance : "Credit balance"(구매한 크레딧) 금액
+ *   promo   : "Promotional credits" 표의 합계 { total, count, nextExpiry, nextExpiryAmount, latestGranted, items[] } 또는 null
  */
 (function (root) {
   'use strict';
@@ -77,6 +79,18 @@
     '결제 수단',
     '청구 주소',
   ];
+
+  // 프로모션 크레딧 구역 (2026-11 실제 화면 : 제목 "Promotional credits",
+  // 표 칸 = [Name] · Remaining balance · Applies to · Expires on · Date granted, 남은 금액 칸은 "$12.34 of $50.00" 또는 "$12.34 remaining")
+  const PROMO_HEADINGS = ['promotional credits', 'promotional credit', '프로모션 크레딧'];
+  const PROMO_HDR = {
+    remaining: /remaining|남은|잔여/i,
+    expires: /expires|expiry|expiration|만료/i,
+    granted: /granted|지급|부여/i,
+    scope: /applies|적용/i,
+    name: /^(name|이름)\b/i,
+  };
+  const MONEY_G = /([-−])?\s*(?:US)?\$\s?([-−])?\s*(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?/g;
 
   const MONTHS = {
     jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
@@ -186,6 +200,106 @@
     return found;
   }
 
+  function amountsIn(text) {
+    const out = [];
+    const re = new RegExp(MONEY_G.source, 'g');
+    let m;
+    while ((m = re.exec(String(text || '')))) {
+      const v = toAmount(m);
+      if (v !== null) out.push(v);
+    }
+    return out;
+  }
+
+  function round2(v) {
+    return Math.round(v * 100) / 100;
+  }
+
+  function localDateKey(t) {
+    const d = new Date(t);
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function promoItem(cells, todayKey) {
+    const amounts = amountsIn(cells.remaining);
+    if (!amounts.length) return null;
+    const remaining = amounts[0];
+    const granted = /\bof\b|\/|중/.test(cells.remaining || '') && amounts.length > 1 ? amounts[1] : null;
+    const expires = parseDate(cells.expires || '');
+    const grantedAt = parseDate(cells.granted || '');
+    return {
+      name: norm(cells.name || '').slice(0, 60) || null,
+      remaining: remaining,
+      granted: granted,
+      expires: expires,
+      grantedAt: grantedAt,
+      appliesTo: norm(cells.scope || '').slice(0, 80) || null,
+      expired: Boolean(expires && todayKey && expires < todayKey),
+    };
+  }
+
+  function summarizePromo(items) {
+    if (!items.length) return null;
+    const active = items.filter((x) => !x.expired);
+    let total = 0;
+    for (const x of active) total += x.remaining;
+    const upcoming = active.filter((x) => x.remaining > 0 && x.expires).sort((a, b) => (a.expires < b.expires ? -1 : 1));
+    let latestGranted = null;
+    for (const x of items) if (x.grantedAt && (!latestGranted || x.grantedAt > latestGranted)) latestGranted = x.grantedAt;
+    return {
+      total: round2(total),
+      count: active.length,
+      nextExpiry: upcoming.length ? upcoming[0].expires : null,
+      nextExpiryAmount: upcoming.length ? upcoming[0].remaining : null,
+      latestGranted: latestGranted,
+      items: items.slice(0, 10),
+    };
+  }
+
+  /** 표(구조)에서 프로모션 크레딧 읽기 — 칸 이름으로 위치를 찾는다(CSS 이름에 기대지 않음) */
+  function parsePromoFromTables(tables, todayKey) {
+    for (const t of tables || []) {
+      const headers = (t.headers || []).map((h) => norm(h));
+      const label = norm(t.label || '');
+      const idx = (re) => headers.findIndex((h) => re.test(h));
+      const rem = idx(PROMO_HDR.remaining);
+      if (rem < 0) continue;
+      if (headers.some((h) => /invoice|청구서/i.test(h))) continue;
+      if (!/promo|프로모션/i.test(label) && idx(PROMO_HDR.expires) < 0) continue;
+      const col = { remaining: rem, expires: idx(PROMO_HDR.expires), granted: idx(PROMO_HDR.granted), scope: idx(PROMO_HDR.scope), name: idx(PROMO_HDR.name) };
+      const items = [];
+      for (const row of t.rows || []) {
+        const cell = (k) => (col[k] >= 0 && col[k] < row.length ? row[col[k]] : '');
+        const it = promoItem({ remaining: cell('remaining'), expires: cell('expires'), granted: cell('granted'), scope: cell('scope'), name: cell('name') }, todayKey);
+        if (it) items.push(it);
+      }
+      const sum = summarizePromo(items);
+      if (sum) return sum;
+    }
+    return null;
+  }
+
+  /** 표 구조를 못 받았을 때 : 글자에서 "Promotional credits" 구역의 "$x of $y" / "$x remaining" 을 읽는다 */
+  function parsePromoFromText(lines, todayKey) {
+    const start = lines.findIndex((l) => PROMO_HEADINGS.indexOf(labelKey(l)) >= 0);
+    if (start < 0) return null;
+    const items = [];
+    const end = Math.min(lines.length, start + 80);
+    for (let i = start + 1; i < end; i++) {
+      const key = labelKey(lines[i]);
+      if (BALANCE_LABELS.indexOf(key) >= 0 || (SECTION_STOP.indexOf(key) >= 0 && PROMO_HEADINGS.indexOf(key) < 0)) break;
+      const line = lines[i];
+      if (!/\$\s?\d/.test(line) || !/\bof\b|remaining|남음|남은/i.test(line)) continue;
+      const parts = line.split('\t').map(norm);
+      const remCell = parts.find((p) => /\$\s?\d/.test(p) && /\bof\b|remaining|남음|남은/i.test(p)) || line;
+      let rest = parts.slice(parts.indexOf(remCell) + 1).join(' ');
+      if (!parseDate(rest)) rest = rest + ' ' + (lines[i + 1] || '') + ' ' + (lines[i + 2] || '');
+      const it = promoItem({ remaining: remCell, expires: rest, granted: '', scope: '', name: parts.indexOf(remCell) > 0 ? parts[0] : '' }, todayKey);
+      if (it) items.push(it);
+    }
+    return summarizePromo(items);
+  }
+
   function parseBillingText(text, opts) {
     const url = (opts && opts.url) || '';
     const raw = String(text || '').replace(/\r/g, '');
@@ -195,10 +309,13 @@
 
     const loginLike = looksLikeLoginUrl(url) || hasAny(lower, LOGIN_MARKERS);
     const recharges = findRecharges(rawLines);
+    const todayKey = localDateKey((opts && opts.now) || Date.now());
+    const promo = (opts && opts.tables && parsePromoFromTables(opts.tables, todayKey)) || parsePromoFromText(lines, todayKey);
     const result = {
       status: 'label_not_found',
       balance: null,
       balanceText: null,
+      promo: promo,
       recharges: recharges,
       latestRecharge: recharges.length ? recharges[0].date : null,
     };
@@ -211,10 +328,15 @@
       hit = findBalanceAfter(lines, i);
     }
 
-    if (hit && hit.value !== null && !looksLikeLoginUrl(url) && !hasAny(lower, LOGIN_MARKERS)) {
+    const loggedOut = looksLikeLoginUrl(url) || hasAny(lower, LOGIN_MARKERS);
+    if (hit && hit.value !== null && !loggedOut) {
       result.status = 'ok';
       result.balance = hit.value;
       result.balanceText = hit.text;
+      return result;
+    }
+    if (promo && !loggedOut) {
+      result.status = 'ok'; // 프로모션 크레딧만 읽힌 경우(구매 크레딧 카드는 아직 로딩 중일 수 있음)
       return result;
     }
     if (loginLike) {
@@ -230,7 +352,7 @@
     return result;
   }
 
-  const api = { parseBillingText, parseDate, looksLikeLoginUrl, BALANCE_LABELS, LOGIN_MARKERS };
+  const api = { parseBillingText, parseDate, looksLikeLoginUrl, parsePromoFromTables, parsePromoFromText, BALANCE_LABELS, LOGIN_MARKERS };
   root.CBK = root.CBK || {};
   root.CBK.billing = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

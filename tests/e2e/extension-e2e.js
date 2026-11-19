@@ -29,6 +29,7 @@ const mock = {
   balance: '$42.18',
   delayMs: 800, // 결제 페이지가 금액을 늦게 그리는 시간
   extraSinceCents: 0, // 실측 이후 사용액(센트)
+  promo: false, // 프로모션 크레딧 표 넣기
   apiCalls: 0,
   billingLoads: 0,
 };
@@ -59,6 +60,13 @@ function billingHtml() {
   <section><h2>Credit balance</h2><div>Credits are used by the API, Claude Code, and playground.</div>
   <div id="card">Loading</div>
   <p>Auto-reload is on. Your balance will be topped up to $50.00 when your balance falls below $10.00.</p></section>
+  ${mock.promo ? `<section><h2>Promotional credits</h2><div>Promotional credits granted to your organization. All dates are in UTC.</div>
+  <table aria-label="Promotional credits"><thead><tr><th>Name</th><th>Remaining balance</th><th>Applies to</th><th>Expires on</th><th>Date granted</th></tr></thead>
+  <tbody>
+  <tr><td>Startup program</td><td><div><svg width="20" height="20"></svg><span>$37.50 <span>of $50.00</span></span></div></td><td><div style="display:flex;flex-direction:column"><span>Claude Opus 5.5</span><span>API</span></div></td><td>Dec 31, 2099, 23:59 UTC</td><td>Nov 12, 2026</td></tr>
+  <tr><td>Promotional credit</td><td><span>$4.25 remaining</span></td><td>All models and products</td><td>Jan 15, 2100, 23:59 UTC</td><td>Oct 10, 2026</td></tr>
+  <tr><td>Old bonus</td><td><span>$9.00 <span>of $10.00</span></span></td><td>All models and products</td><td>Jan 1, 2020, 23:59 UTC</td><td>Dec 1, 2019</td></tr>
+  </tbody></table></section>` : ''}
   <section><h2>Invoice history</h2><table><tr><td>Nov 3, 2026</td><td>INV-1</td><td>Credit grant</td><td>$50.00</td><td>Paid</td></tr></table></section>
   </main><script>setTimeout(function(){document.getElementById('card').innerHTML='<span>${mock.balance}</span>';}, ${mock.delayMs});</script>
   </body></html>`;
@@ -140,7 +148,7 @@ async function step(name, fn) {
     console.log('  통과 · ' + name);
   } catch (e) {
     results.push([false, name]);
-    console.log('  실패 · ' + name + '\n         ' + (e && e.message ? e.message.split('\n')[0] : e));
+    console.log('  실패 · ' + name + '\n         ' + (e && e.message ? e.message.split('\n').slice(0, 6).join('\n         ') : e));
   }
 }
 
@@ -323,9 +331,10 @@ async function step(name, fn) {
     await p.close();
     // 다시 확인해도 알림은 다시 뜨지 않음
     await sw.evaluate(() => chrome.notifications.clear('cbk-low-balance'));
+    const before = (await store('balance')).balance.measuredAt;
     await setStore({ lastCheckAt: 0 });
     const p2 = await openPopup();
-    await waitFor(async () => (await store('balanceStatus')).balanceStatus.state === 'ok' && (await store('lastCheckAt')).lastCheckAt > 0, 15000, '재확인');
+    await waitFor(async () => (await store('balance')).balance.measuredAt > before, 15000, '재확인 완료');
     await new Promise((r) => setTimeout(r, 1500));
     assert.equal((await notifs())['cbk-low-balance'], undefined);
     await p2.close();
@@ -420,6 +429,47 @@ async function step(name, fn) {
     }, 10000, '직접 연 페이지');
     assert.equal(s.balance.source, 'page');
     await p.close();
+  });
+
+  await step('프로모션 크레딧 : 표를 읽어 큰 숫자로, 구매 크레딧은 아래 작게, 만료일 표시', async () => {
+    await setStore({ lastCheckAt: 0, recharge: {} }); // 앞 단계의 "자동 감지" 충전일(오늘)을 비워 프로모션 지급일을 확인
+    mock.balance = '$0.00';
+    mock.promo = true;
+    const p = await openPopup();
+    await waitFor(async () => (await p.textContent('#balance-label')) === '프로모션 크레딧', 15000, '프로모션 라벨');
+    assert.equal(await p.textContent('#balance'), '$41.75'); // 37.50 + 4.25 (2020년에 만료된 $9 는 제외)
+    assert.equal(await p.textContent('#balance-sub'), '구매한 크레딧 $0.00');
+    assert.match(await p.textContent('#promo-note'), /프로모션 만료 2099년 12월 31일 \(\$37\.50\) · 2건/);
+    assert.equal(await p.textContent('#recharge-src'), '프로모션 지급일');
+    assert.equal(await p.textContent('#recharge-date'), '2026년 11월 12일');
+    const s = await store('balance');
+    assert.equal(s.balance.promo.total, 41.75);
+    assert.equal(s.balance.value, 0);
+    await shot(p, 'popup-promo.png');
+    await p.close();
+  });
+
+  await step('설정에서 「구매한 크레딧」을 고르면 그쪽이 큰 숫자 · 알림 기준', async () => {
+    const o = await context.newPage();
+    await o.goto('chrome-extension://' + extId + '/options.html');
+    await o.check('input[name="primary"][value="credit"]');
+    await o.click('#save-settings');
+    await waitFor(async () => (await o.textContent('#save-result')).includes('저장했습니다'), 5000, '저장');
+    await o.close();
+    const p = await openPopup();
+    await waitFor(async () => (await p.textContent('#balance-label')) === '구매한 크레딧', 5000, '구매 라벨');
+    assert.equal(await p.textContent('#balance'), '$0.00');
+    assert.equal(await p.textContent('#balance-sub'), '프로모션 크레딧 $41.75');
+    await waitFor(async () => (await badge()) === '!', 5000, '구매 크레딧 $0 → 부족 배지');
+    await p.close();
+    // 다시 프로모션으로 되돌리면 $41.75 > $5 라 배지가 사라진다
+    const o2 = await context.newPage();
+    await o2.goto('chrome-extension://' + extId + '/options.html');
+    await o2.check('input[name="primary"][value="promo"]');
+    await o2.click('#save-settings');
+    await waitFor(async () => (await badge()) === '', 5000, '배지 해제');
+    await o2.close();
+    mock.promo = false;
   });
 
   await step('관리자 키 삭제 → 팝업에 "사용액은 선택 기능" 안내', async () => {
